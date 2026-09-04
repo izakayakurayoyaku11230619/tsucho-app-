@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>通帳仕分け(freee取込用Excel作成)</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="app-header">
+  <div class="header-row">
+    <h1 class="app-title">通帳仕分け(freee取込用Excel作成)</h1>
+    <div class="header-actions">
+      <button id="btn-export-backup" class="btn btn-secondary" title="全データをJSONで書き出し">💾 バックアップ</button>
+      <button id="btn-import-backup" class="btn btn-secondary" title="バックアップから復元(現在のデータを上書きします)">📂 復元</button>
+      <input type="file" id="backup-file-input" accept="application/json,.json" hidden>
+    </div>
+  </div>
+</header>
+
+<div class="app-body">
+  <nav class="app-sidebar" id="account-sidebar"></nav>
+  <main class="app-main">
+    <section id="view-tsucho" class="view"></section>
+  </main>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
