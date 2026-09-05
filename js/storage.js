@@ -145,6 +145,11 @@ export function deleteTsuchoRecordsBySource(sourceFileName) {
   saveTsuchoRecords(getTsuchoRecords().filter((r) => r.sourceFileName !== sourceFileName));
 }
 
+/** 決済口座名が一致する明細を全部削除する(口座を丸ごと消して取り込み直したい場合用)。 */
+export function deleteTsuchoRecordsByAccountName(accountName) {
+  saveTsuchoRecords(getTsuchoRecords().filter((r) => r.bankAccountName !== accountName));
+}
+
 /**
  * 取込元ファイル1つ分の明細だけを対象に、日付の「年」だけをまとめてずらす
  * (AIが和暦→西暦の変換を誤り、例えば令和6年を「2024年」ではなく「2006年」と

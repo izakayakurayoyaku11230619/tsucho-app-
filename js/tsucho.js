@@ -3,7 +3,7 @@
 // 取り込んだファイルごとに1つのfreee取込用Excel(元のファイル名.xlsx)を作成する。
 // 「保存」した明細はTsuchoTxnとしてlocalStorageに残り、下部の銀行別・口座別一覧で管理できる。
 import {
-  uid, getTsuchoRecords, upsertTsuchoRecords, deleteTsuchoRecordsBySource, deleteTsuchoRecordsByIds,
+  uid, getTsuchoRecords, upsertTsuchoRecords, deleteTsuchoRecordsBySource, deleteTsuchoRecordsByIds, deleteTsuchoRecordsByAccountName,
   getKnownAccounts, addKnownAccount, findKnownAccountByNumber, setAccountEntityType, setAccountKind,
   listBankAccountNamesInRecords, mergeBankAccountNames, findDuplicateGroups, listSourceFilesInRecords, listAccountSummaries,
   getVerifiedBalance, setVerifiedBalance, reassignSourceFileAccount, shiftSourceFileDateYears,
@@ -611,7 +611,7 @@ export function initTsucho(root, sidebarRoot) {
     const accounts = listAccountSummaries();
     accountSummaryResultEl.innerHTML = accounts.length
       ? `<table class="data-table">
-          <thead><tr><th>口座名</th><th>口座番号</th><th>件数</th><th>合計金額</th><th>期間</th><th>残高(最新)</th><th>通帳残高確認</th></tr></thead>
+          <thead><tr><th>口座名</th><th>口座番号</th><th>件数</th><th>合計金額</th><th>期間</th><th>残高(最新)</th><th>通帳残高確認</th><th></th></tr></thead>
           <tbody>${accounts.map((a) => {
             const isLoan = a.accountKind === '借入金';
             const verified = getVerifiedBalance(a.name);
@@ -628,6 +628,7 @@ export function initTsucho(root, sidebarRoot) {
                 <button type="button" class="btn btn-secondary btn-sm" data-verify-account-btn="${escapeAttr(a.name)}">確認</button>
                 <div data-verify-account-result="${escapeAttr(a.name)}" style="margin-top:4px">${verifiedBalanceResultHtml(a, verified)}</div>
               </td>
+              <td><button type="button" class="btn btn-ghost btn-sm" data-delete-account="${escapeAttr(a.name)}" title="この口座の明細を全部削除">🗑口座を削除</button></td>
             </tr>`;
           }).join('')}</tbody>
         </table>`
@@ -643,6 +644,19 @@ export function initTsucho(root, sidebarRoot) {
         const account = accounts.find((a) => a.name === name);
         const resultEl = accountSummaryResultEl.querySelector(`[data-verify-account-result="${CSS.escape(name)}"]`);
         resultEl.innerHTML = verifiedBalanceResultHtml(account, getVerifiedBalance(name));
+      });
+    });
+
+    accountSummaryResultEl.querySelectorAll('[data-delete-account]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const name = btn.dataset.deleteAccount;
+        const account = accounts.find((a) => a.name === name);
+        if (!confirm(`「${name}」の明細を全部(${account?.count ?? 0}件)削除します。取り込み直す前提での操作です。よろしいですか？`)) return;
+        deleteTsuchoRecordsByAccountName(name);
+        renderAccountSummary();
+        renderFileHistory();
+        renderAccountButtons();
+        renderBankPanel();
       });
     });
 
