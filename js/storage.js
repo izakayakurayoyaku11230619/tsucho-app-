@@ -335,6 +335,7 @@ export function listBankAccountNamesInRecords() {
  */
 export function listAccountSummaries() {
   const byName = {};
+  const latestTieBreakKey = {}; // 同じ日付の行が複数あるとき、どちらを「最新」とみなすかの判定用
   for (const r of getTsuchoRecords()) {
     const key = r.bankAccountName || '(口座未設定)';
     if (!byName[key]) byName[key] = { name: key, count: 0, total: 0, firstDate: r.date, lastDate: r.date, latestBalance: 0, latestBalanceDate: '' };
@@ -343,9 +344,16 @@ export function listAccountSummaries() {
     entry.total += r.amount || 0;
     if (r.date && (!entry.firstDate || r.date < entry.firstDate)) entry.firstDate = r.date;
     if (r.date && (!entry.lastDate || r.date > entry.lastDate)) entry.lastDate = r.date;
-    if (r.balance && r.date && (!entry.latestBalanceDate || r.date >= entry.latestBalanceDate)) {
-      entry.latestBalance = r.balance;
-      entry.latestBalanceDate = r.date;
+    if (r.balance && r.date) {
+      // Firestoreはコレクションを保存順どおりに返してくれないため、同じ日付の行が複数あるときは
+      // 取込時に記録したseq(ファイル内の本来の行順)で決める(無い古いデータはidで代用)。
+      const tieBreakKey = `${String(r.seq ?? '').padStart(10, '0')}_${r.id || ''}`;
+      if (!entry.latestBalanceDate || r.date > entry.latestBalanceDate
+        || (r.date === entry.latestBalanceDate && tieBreakKey >= (latestTieBreakKey[key] || ''))) {
+        entry.latestBalance = r.balance;
+        entry.latestBalanceDate = r.date;
+        latestTieBreakKey[key] = tieBreakKey;
+      }
     }
   }
   const knownByName = {};

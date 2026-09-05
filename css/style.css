@@ -247,6 +247,8 @@ select, input { font-family: inherit; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .data-table th, .data-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--color-border); }
 .data-table th { color: var(--color-text-muted); font-weight: 600; }
+/* ファイル名など、長い文字列が入る1列目が極端に狭く押しつぶされて縦に1文字ずつ折り返るのを防ぐ */
+.data-table td:first-child, .data-table th:first-child { min-width: 140px; }
 .table-action-cell { width: 1%; text-align: right !important; }
 .cell-sub { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
 .danger-text { color: var(--color-danger); font-weight: 600; }

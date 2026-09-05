@@ -234,11 +234,26 @@ function gapsFromFlaggedRows(rows) {
  * 崩れている箇所は「その前後の間で、読み取れていない取引がある可能性が高い」場所を示す。
  * @returns {Array<{afterDate:string, afterCounterparty:string, beforeDate:string, beforeCounterparty:string, expected:number, actual:number, diff:number}>}
  */
+/**
+ * 日付順の比較関数。Firestoreはコレクションを保存順どおりに返してくれないため、
+ * 同じ日付の行が複数あるとき用に、取込時に記録したseq(ファイル内の本来の行順)を
+ * 次点の判定材料にする(seqが無い古いデータはidで代用。完全ではないが、少なくとも
+ * 毎回同じ順序になり、読み込むたびに結果が変わることは防げる)。
+ */
+function compareByDateThenSeq(a, b) {
+  const byDate = (a.date || '').localeCompare(b.date || '');
+  if (byDate !== 0) return byDate;
+  const aSeq = a.seq ?? null;
+  const bSeq = b.seq ?? null;
+  if (aSeq !== null && bSeq !== null && aSeq !== bSeq) return aSeq - bSeq;
+  return String(a.id || '').localeCompare(String(b.id || ''));
+}
+
 function checkBalanceContinuityForFile(sourceFileName) {
   const rows = getTsuchoRecords()
     .filter((r) => r.sourceFileName === sourceFileName)
     .map((r) => ({ ...r }))
-    .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    .sort(compareByDateThenSeq);
   flagBalanceMismatches(rows);
   return gapsFromFlaggedRows(rows);
 }
@@ -257,7 +272,7 @@ function checkBalanceContinuityAllAccounts() {
   }
   const results = [];
   for (const [accountName, rows] of Object.entries(byAccount)) {
-    rows.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+    rows.sort(compareByDateThenSeq);
     flagBalanceMismatches(rows);
     const gaps = gapsFromFlaggedRows(rows);
     if (gaps.length) results.push({ accountName, gaps });
@@ -1238,7 +1253,10 @@ export function initTsucho(root, sidebarRoot) {
       if (invalidRow) { alert('発生日が空欄の行があります。すべての行に日付を入力してください。'); return; }
       const dupCount = f.rows.filter((r) => r.possibleDuplicate).length;
       if (dupCount > 0 && !confirm(`${dupCount}件、既に保存済みの明細と日付・金額・区分・摘要が一致する行があります(表を再スキャンした場合など、二重取込の可能性があります)。⚠マークの行を確認のうえ、それでも保存しますか？`)) return;
-      const records = f.rows.map((r) => ({ ...r, bankAccountName: f.bankAccountName, createdAt: Date.now() }));
+      // seq: 通帳・明細ファイル内での本来の行順(0始まり)。Firestoreはコレクションを日付順・保存順どおりに
+      // 返してくれない(ドキュメントの並び順は保証されない)ため、同じ日付の行が複数あるとき
+      // (例: 積立式振替・約定利息・延滞利息が同日に何行も続く場合)に本来の順序へ並べ直すために使う。
+      const records = f.rows.map((r, idx) => ({ ...r, bankAccountName: f.bankAccountName, createdAt: Date.now(), seq: idx }));
       upsertTsuchoRecords(records);
       f.saved = true;
       renderFileList();
