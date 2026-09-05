@@ -439,16 +439,6 @@ export function setVerifiedBalance(accountName, balance) {
   saveVerifiedBalancesNow(all);
 }
 
-/**
- * このブラウザに残っている旧バージョン(IndexedDB/localStorage時代)のデータをまとめて上書き保存する。
- * Firestoreへの切り替え前に保存されていたデータを、1回だけ移行するための関数。
- */
-export function restoreLegacyData({ records, knownAccounts, verifiedBalances }) {
-  if (records) saveTsuchoRecords(records);
-  if (knownAccounts) saveKnownAccountsNow(knownAccounts);
-  if (verifiedBalances) saveVerifiedBalancesNow(verifiedBalances);
-}
-
 export function uid(prefix = 'id') {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }

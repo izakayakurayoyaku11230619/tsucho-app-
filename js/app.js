@@ -1,8 +1,7 @@
 import { initTsucho } from './tsucho.js';
 import { exportBackup, importBackup } from './backup.js';
-import { initTsuchoStorage, flushPendingWrites, getTsuchoRecords, restoreLegacyData } from './storage.js';
+import { initTsuchoStorage, flushPendingWrites } from './storage.js';
 import { requireLogin } from './firebaseClient.js';
-import { readLegacyData } from './legacyData.js';
 
 // 起動が終わるまで、空っぽの画面が一瞬見えてしまうのを防ぐための軽い読み込み表示。
 const bootOverlay = document.createElement('div');
@@ -21,29 +20,6 @@ async function boot() {
   await initTsuchoStorage();
 
   const tsuchoApi = initTsucho(document.getElementById('view-tsucho'), document.getElementById('account-sidebar'));
-
-  // Firestoreへの切り替え前に、このブラウザにIndexedDB/localStorageで保存されていた旧データが
-  // 残っていて、かつクラウド側がそれより少ない(未移行、または途中で失敗した移行)場合に移行を提案する。
-  {
-    const legacy = await readLegacyData();
-    if (legacy.records.length > getTsuchoRecords().length) {
-      const banner = document.createElement('div');
-      banner.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;background:#fff7ed;border:1px solid #fb923c;border-radius:10px;padding:14px 16px;z-index:500;box-shadow:0 4px 16px rgba(0,0,0,0.1)';
-      banner.innerHTML = `
-        <p style="margin:0 0 10px;font-size:14px">このパソコンに残っている古いデータ(${legacy.records.length}件)の方が、クラウド上のデータ(${getTsuchoRecords().length}件)より多いです。クラウド側をこのパソコンの内容で上書きしますか？</p>
-        <button type="button" class="btn btn-primary btn-sm" id="tsucho-migrate-legacy-btn">☁️ 移行する(上書き)</button>
-        <button type="button" class="btn btn-ghost btn-sm" id="tsucho-migrate-legacy-dismiss">あとで</button>
-      `;
-      document.body.appendChild(banner);
-      banner.querySelector('#tsucho-migrate-legacy-dismiss').addEventListener('click', () => banner.remove());
-      banner.querySelector('#tsucho-migrate-legacy-btn').addEventListener('click', () => {
-        restoreLegacyData(legacy);
-        banner.remove();
-        alert(`移行しました(明細${legacy.records.length}件)。`);
-        tsuchoApi.render();
-      });
-    }
-  }
 
   document.getElementById('btn-export-backup').addEventListener('click', () => {
     exportBackup();
