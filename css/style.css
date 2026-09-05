@@ -104,7 +104,28 @@ select, input { font-family: inherit; }
 .tab-btn:hover { background: var(--color-bg); }
 .tab-btn.active { color: var(--color-primary); border-left-color: var(--color-primary); background: var(--color-bg); font-weight: 600; }
 
-.app-main { flex: 1; min-width: 0; padding: 16px; }
+.app-main { flex: 1; min-width: 0; padding: 16px; max-width: 100%; }
+
+/* 通帳仕分け: 上部の大きなタブ・操作ボタン一覧 */
+.tsucho-top-toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
+.tsucho-top-toolbar > button { font-size: 18px; padding: 14px 28px; }
+
+/* スマホ幅では、サイドバーを上に積み重ねて横幅を圧迫しないようにする。
+   併せて上部ボタンも小さくし、折り返しても崩れないようにする。 */
+@media (max-width: 700px) {
+  .app-body { flex-direction: column; }
+  .app-sidebar {
+    width: 100%;
+    height: auto;
+    max-height: none;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .app-main { padding: 10px; }
+  .tsucho-top-toolbar > button { font-size: 14px; padding: 8px 14px; }
+  .data-table { display: block; overflow-x: auto; white-space: nowrap; }
+}
 
 /* Month nav */
 .month-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }

@@ -297,14 +297,14 @@ export function initTsucho(root, sidebarRoot) {
   `;
 
   root.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
-      <button type="button" class="btn btn-primary" id="tsucho-tab-top" style="font-size:18px;padding:14px 28px">🏠 トップ</button>
-      <button type="button" class="btn btn-secondary" id="tsucho-tab-import" style="font-size:18px;padding:14px 28px">📥 データ取り込み</button>
-      <button type="button" class="btn btn-secondary" id="tsucho-tab-list" style="font-size:18px;padding:14px 28px">📚 明細一覧</button>
-      <button type="button" class="btn btn-secondary" id="tsucho-check-duplicates" style="font-size:18px;padding:14px 28px">🔍 現在重複しているかチェック</button>
-      <button type="button" class="btn btn-secondary" id="tsucho-check-balance-top" style="font-size:18px;padding:14px 28px">🔍 残高チェック</button>
-      <button type="button" class="btn btn-secondary" id="tsucho-show-file-history" style="font-size:18px;padding:14px 28px">📁 取込ファイル一覧</button>
-      <button type="button" class="btn btn-secondary" id="tsucho-show-account-manage-top" style="font-size:18px;padding:14px 28px">✏️ 口座名を変更</button>
+    <div class="tsucho-top-toolbar">
+      <button type="button" class="btn btn-primary" id="tsucho-tab-top">🏠 トップ</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-tab-import">📥 データ取り込み</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-tab-list">📚 明細一覧</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-check-duplicates">🔍 現在重複しているかチェック</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-check-balance-top">🔍 残高チェック</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-show-file-history">📁 取込ファイル一覧</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-show-account-manage-top">✏️ 口座名を変更</button>
       <span id="tsucho-current-file-label" style="font-size:14px;color:var(--color-text-muted)"></span>
     </div>
 
