@@ -207,7 +207,9 @@ function flagBalanceMismatches(rows) {
       if (expected !== row.balance) {
         row.needsBalanceCheck = true;
         row.balanceCheckExpected = expected;
-        row.balanceCheckPrevRow = prevRow;
+        // prevRowをそのまま持たせるとFirestore保存時に「入れ子のエンティティ」エラーになるため、
+        // 表示に必要な値だけ抜き出す。
+        row.balanceCheckPrevRow = { date: prevRow.date, counterparty: prevRow.counterparty };
       }
     }
     prevBalance = row.balance;
@@ -1113,7 +1115,11 @@ export function initTsucho(root, sidebarRoot) {
         const row = rawTxnToRow(entry.fileName, entry.bankAccountName, t);
         const dup = findDuplicateInSaved(row, savedRecords);
         row.possibleDuplicate = !!dup;
-        row.duplicateOf = dup;
+        // 保存済みレコードそのものを丸ごと持たせると、Firestore保存時に
+        // 「入れ子のエンティティ」としてエラーになるため、表示に必要な値だけ抜き出す。
+        row.duplicateOf = dup
+          ? { sourceFileName: dup.sourceFileName, date: dup.date, direction: dup.direction, accountLabel: dup.accountLabel, counterparty: dup.counterparty, amount: dup.amount }
+          : null;
         return row;
       });
       flagBalanceMismatches(entry.rows);

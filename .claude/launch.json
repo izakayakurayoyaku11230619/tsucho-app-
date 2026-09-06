@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "tsucho-app",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8136"],
+      "port": 8136
+    }
+  ]
+}
