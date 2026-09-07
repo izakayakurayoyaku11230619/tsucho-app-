@@ -462,6 +462,27 @@ export function initTsucho(root, sidebarRoot) {
 
   // --- トップ画面(口座残高合計・ローン残高合計。今後ここに必要な情報を追加していく) ---
   const topDashboardEl = root.querySelector('#tsucho-top-dashboard');
+  const expandedLoanAccounts = new Set(); // 「内訳を見る」で開いたローン口座名(再描画をまたいで開閉状態を保持する)
+
+  function loanScheduleTableHtml(accountName, todayIso) {
+    const rows = getTsuchoRecords()
+      .filter((r) => r.bankAccountName === accountName)
+      .sort(compareByDateThenSeq);
+    if (!rows.length) return '<p class="empty-hint">明細がありません。</p>';
+    return `<table class="data-table" style="margin:6px 0 14px">
+      <thead><tr><th>返済予定日</th><th>内訳</th><th style="text-align:right">返済額</th><th style="text-align:right">返済後残高</th></tr></thead>
+      <tbody>${rows.map((r) => {
+        const isToday = r.date === todayIso;
+        const isFuture = r.date > todayIso;
+        return `<tr style="${isFuture ? 'color:var(--color-text-muted)' : ''}${isToday ? ';font-weight:700' : ''}">
+          <td style="white-space:nowrap">${r.date}${isToday ? ' (本日)' : ''}</td>
+          <td>${escapeHtml(r.counterparty)}</td>
+          <td style="text-align:right;white-space:nowrap">${r.direction === '出金' ? '－' : '＋'}${currency(r.amount)}</td>
+          <td style="text-align:right;white-space:nowrap">${currency(r.balance)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+  }
 
   function renderTopDashboard() {
     const accounts = listAccountSummaries();
@@ -473,18 +494,26 @@ export function initTsucho(root, sidebarRoot) {
     const normalAccounts = accounts.filter((a) => a.accountKind !== '借入金');
     const totalBalance = normalAccounts.reduce((sum, a) => sum + (a.latestBalance || 0), 0);
     const totalLoan = loanAccounts.reduce((sum, a) => sum + (a.latestBalance || 0), 0);
+    const todayIso = new Date().toISOString().slice(0, 10);
 
     const accountRow = (a) => {
       const isLoan = a.accountKind === '借入金';
       // ローン口座は返済予定表を取り込んでおくと、今日以降の次回返済予定もここに出す。
       const nextInfo = isLoan && a.nextBalanceDate
         ? `<div class="empty-hint" style="text-align:right;font-size:12px">次回 ${a.nextBalanceDate} → ${currency(a.nextBalance)}</div>` : '';
-      return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--color-border)">
-        <span>${escapeHtml(a.name)}</span>
-        <span style="text-align:right">
-          <span style="font-weight:700${isLoan ? ';color:var(--color-danger)' : ''}">${a.latestBalance ? `${isLoan ? '－' : ''}${currency(a.latestBalance)}` : '<span class="empty-hint">(残高不明)</span>'}</span>
-          ${nextInfo}
-        </span>
+      const isExpanded = isLoan && expandedLoanAccounts.has(a.name);
+      const toggleBtn = isLoan
+        ? `<button type="button" class="btn btn-ghost btn-sm" data-toggle-loan-detail="${escapeAttr(a.name)}" style="margin-left:8px">${isExpanded ? '▲内訳を閉じる' : '▼内訳を見る'}</button>` : '';
+      const detail = isExpanded ? loanScheduleTableHtml(a.name, todayIso) : '';
+      return `<div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--color-border)">
+          <span>${escapeHtml(a.name)}${toggleBtn}</span>
+          <span style="text-align:right">
+            <span style="font-weight:700${isLoan ? ';color:var(--color-danger)' : ''}">${a.latestBalance ? `${isLoan ? '－' : ''}${currency(a.latestBalance)}` : '<span class="empty-hint">(残高不明)</span>'}</span>
+            ${nextInfo}
+          </span>
+        </div>
+        ${detail}
       </div>`;
     };
 
@@ -504,6 +533,15 @@ export function initTsucho(root, sidebarRoot) {
       ${normalAccounts.length ? `<h3 style="margin:16px 0 4px">💰 口座残高</h3>${normalAccounts.map(accountRow).join('')}` : ''}
       ${loanAccounts.length ? `<h3 style="margin:16px 0 4px">💳 ローン残高</h3>${loanAccounts.map(accountRow).join('')}` : ''}
     `;
+
+    topDashboardEl.querySelectorAll('[data-toggle-loan-detail]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const name = btn.dataset.toggleLoanDetail;
+        if (expandedLoanAccounts.has(name)) expandedLoanAccounts.delete(name);
+        else expandedLoanAccounts.add(name);
+        renderTopDashboard();
+      });
+    });
   }
 
   // --- 重複チェック(保存済みデータ全体を対象に、日付・金額・区分・摘要・残高が完全一致するものを探す) ---
