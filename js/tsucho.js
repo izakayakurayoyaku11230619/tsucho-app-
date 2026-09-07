@@ -517,6 +517,23 @@ export function initTsucho(root, sidebarRoot) {
       </div>`;
     };
 
+    // 銀行ごとにグループ化して表示する(法人/個人・複数口座がある銀行でも、まとめて把握できるように)。
+    const groupedByBank = (list) => {
+      const byBank = {};
+      for (const a of list) (byBank[bankNameOf(a.name)] ??= []).push(a);
+      return Object.entries(byBank);
+    };
+    const bankGroupHtml = (list, { isLoan }) => groupedByBank(list).map(([bank, group]) => {
+      const subtotal = group.reduce((sum, a) => sum + (a.latestBalance || 0), 0);
+      return `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;padding:4px 0;font-weight:700;color:var(--color-text-muted)">
+          <span>🏦 ${escapeHtml(bank)}</span>
+          <span>${isLoan ? '－' : ''}${currency(subtotal)}</span>
+        </div>
+        ${group.map(accountRow).join('')}
+      </div>`;
+    }).join('');
+
     topDashboardEl.innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
         <div class="summary-card" style="flex:1;min-width:220px">
@@ -530,8 +547,8 @@ export function initTsucho(root, sidebarRoot) {
           <div class="summary-card-sub">${loanAccounts.length}口座の合計</div>
         </div>
       </div>
-      ${normalAccounts.length ? `<h3 style="margin:16px 0 4px">💰 口座残高</h3>${normalAccounts.map(accountRow).join('')}` : ''}
-      ${loanAccounts.length ? `<h3 style="margin:16px 0 4px">💳 ローン残高</h3>${loanAccounts.map(accountRow).join('')}` : ''}
+      ${normalAccounts.length ? `<h3 style="margin:16px 0 4px">💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}` : ''}
+      ${loanAccounts.length ? `<h3 style="margin:16px 0 4px">💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}` : ''}
     `;
 
     topDashboardEl.querySelectorAll('[data-toggle-loan-detail]').forEach((btn) => {
