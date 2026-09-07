@@ -339,11 +339,18 @@ export function listBankAccountNamesInRecords() {
  * @returns {Array<{name:string, count:number, total:number, firstDate:string, lastDate:string, latestBalance:number, latestBalanceDate:string, accountNumber:string}>} 件数の多い順
  */
 export function listAccountSummaries() {
+  const todayIso = new Date().toISOString().slice(0, 10);
   const byName = {};
   const latestTieBreakKey = {}; // 同じ日付の行が複数あるとき、どちらを「最新」とみなすかの判定用
+  const nextTieBreakKey = {};
   for (const r of getTsuchoRecords()) {
     const key = r.bankAccountName || '(口座未設定)';
-    if (!byName[key]) byName[key] = { name: key, count: 0, total: 0, firstDate: r.date, lastDate: r.date, latestBalance: 0, latestBalanceDate: '' };
+    if (!byName[key]) {
+      byName[key] = {
+        name: key, count: 0, total: 0, firstDate: r.date, lastDate: r.date,
+        latestBalance: 0, latestBalanceDate: '', nextBalance: 0, nextBalanceDate: '',
+      };
+    }
     const entry = byName[key];
     entry.count += 1;
     entry.total += r.amount || 0;
@@ -353,11 +360,20 @@ export function listAccountSummaries() {
       // Firestoreはコレクションを保存順どおりに返してくれないため、同じ日付の行が複数あるときは
       // 取込時に記録したseq(ファイル内の本来の行順)で決める(無い古いデータはidで代用)。
       const tieBreakKey = `${String(r.seq ?? '').padStart(10, '0')}_${r.id || ''}`;
-      if (!entry.latestBalanceDate || r.date > entry.latestBalanceDate
-        || (r.date === entry.latestBalanceDate && tieBreakKey >= (latestTieBreakKey[key] || ''))) {
-        entry.latestBalance = r.balance;
-        entry.latestBalanceDate = r.date;
-        latestTieBreakKey[key] = tieBreakKey;
+      // ローンの返済予定表など、未来の日付の行を取り込んでいても「現在の残高」がずれないように、
+      // 今日以前の行の中だけで最新を判定する。今日より後の行は「次回」の予定として別に覚えておく。
+      if (r.date <= todayIso) {
+        if (!entry.latestBalanceDate || r.date > entry.latestBalanceDate
+          || (r.date === entry.latestBalanceDate && tieBreakKey >= (latestTieBreakKey[key] || ''))) {
+          entry.latestBalance = r.balance;
+          entry.latestBalanceDate = r.date;
+          latestTieBreakKey[key] = tieBreakKey;
+        }
+      } else if (!entry.nextBalanceDate || r.date < entry.nextBalanceDate
+        || (r.date === entry.nextBalanceDate && tieBreakKey <= (nextTieBreakKey[key] ?? '￿'))) {
+        entry.nextBalance = r.balance;
+        entry.nextBalanceDate = r.date;
+        nextTieBreakKey[key] = tieBreakKey;
       }
     }
   }

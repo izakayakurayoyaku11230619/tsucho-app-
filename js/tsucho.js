@@ -476,9 +476,15 @@ export function initTsucho(root, sidebarRoot) {
 
     const accountRow = (a) => {
       const isLoan = a.accountKind === '借入金';
-      return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--color-border)">
+      // ローン口座は返済予定表を取り込んでおくと、今日以降の次回返済予定もここに出す。
+      const nextInfo = isLoan && a.nextBalanceDate
+        ? `<div class="empty-hint" style="text-align:right;font-size:12px">次回 ${a.nextBalanceDate} → ${currency(a.nextBalance)}</div>` : '';
+      return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--color-border)">
         <span>${escapeHtml(a.name)}</span>
-        <span style="font-weight:700${isLoan ? ';color:var(--color-danger)' : ''}">${a.latestBalance ? `${isLoan ? '－' : ''}${currency(a.latestBalance)}` : '<span class="empty-hint">(残高不明)</span>'}</span>
+        <span style="text-align:right">
+          <span style="font-weight:700${isLoan ? ';color:var(--color-danger)' : ''}">${a.latestBalance ? `${isLoan ? '－' : ''}${currency(a.latestBalance)}` : '<span class="empty-hint">(残高不明)</span>'}</span>
+          ${nextInfo}
+        </span>
       </div>`;
     };
 
