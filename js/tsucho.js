@@ -323,6 +323,8 @@ export function initTsucho(root, sidebarRoot) {
       <button type="button" class="btn btn-secondary" id="tsucho-check-balance-top">🔍 残高チェック</button>
       <button type="button" class="btn btn-secondary" id="tsucho-show-file-history">📁 取込ファイル一覧</button>
       <button type="button" class="btn btn-secondary" id="tsucho-show-account-manage-top">✏️ 口座名を変更</button>
+      <button type="button" class="btn btn-secondary" id="btn-export-backup" title="全データをJSONで書き出し">💾 バックアップ</button>
+      <button type="button" class="btn btn-secondary" id="btn-import-backup" title="バックアップから復元(現在のデータを上書きします)">📂 復元</button>
       <span id="tsucho-current-file-label" style="font-size:14px;color:var(--color-text-muted)"></span>
     </div>
 

@@ -106,9 +106,19 @@ select, input { font-family: inherit; }
 
 .app-main { flex: 1; min-width: 0; padding: 16px; max-width: 100%; }
 
-/* 通帳仕分け: 上部の大きなタブ・操作ボタン一覧 */
-.tsucho-top-toolbar { display: flex; gap: 8px; margin-bottom: 16px; align-items: center; flex-wrap: wrap; }
-.tsucho-top-toolbar > button { font-size: 18px; padding: 14px 28px; }
+/* 通帳仕分け: 上部の大きなタブ・操作ボタン一覧。折り返さず1行に並べ、収まらない分は横スクロールする。 */
+.tsucho-top-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.tsucho-top-toolbar > button { font-size: 18px; padding: 14px 28px; flex: 0 0 auto; white-space: nowrap; }
+.tsucho-top-toolbar > span { flex: 0 0 auto; }
 
 /* スマホ幅では、サイドバーを上に積み重ねて横幅を圧迫しないようにする。
    併せて上部ボタンも小さくし、折り返しても崩れないようにする。 */
