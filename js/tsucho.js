@@ -509,12 +509,12 @@ export function initTsucho(root, sidebarRoot) {
     const totalValue = data.owners.reduce((sum, o) => sum + (o.landAssessed || 0) + (o.buildingAssessed || 0), 0);
     const totalTax = data.owners.reduce((sum, o) => sum + (o.taxTotal || 0), 0);
     return `
-      <div class="summary-card">
+      <div class="summary-card summary-card-asset">
         <div class="summary-card-label">🏠 土地・家屋 評価額合計</div>
         <div class="summary-card-value">${currency(totalValue)}</div>
         <div class="summary-card-sub">${data.year || ''}・${data.owners.length}名義の合計</div>
       </div>
-      <div class="summary-card">
+      <div class="summary-card summary-card-tax">
         <div class="summary-card-label">🧾 固定資産税・都市計画税</div>
         <div class="summary-card-value">${currency(totalTax)}</div>
         <div class="summary-card-sub">${data.year || ''} 年税額合計</div>
@@ -539,7 +539,7 @@ export function initTsucho(root, sidebarRoot) {
         ${isExpanded ? realEstatePropertyTableHtml(o) : ''}
       </div>`;
     };
-    return `<div class="tsucho-section-card">
+    return `<div class="tsucho-section-card category-asset">
       <h3>🏠 資産(土地・家屋)</h3>
       ${data.owners.map(ownerRow).join('')}
     </div>`;
@@ -567,7 +567,7 @@ export function initTsucho(root, sidebarRoot) {
           <td style="text-align:right;white-space:nowrap">${currency(s.personal + s.corporate)}</td>
         </tr>`).join('')}</tbody>
     </table>` : '';
-    return `<div class="tsucho-section-card">
+    return `<div class="tsucho-section-card category-tax">
       <h3>🧾 固定資産税・都市計画税</h3>
       ${data.owners.map(taxRow).join('')}
       <p class="empty-hint" style="margin:10px 0 0">期別納付予定(口座振替)</p>
@@ -627,12 +627,12 @@ export function initTsucho(root, sidebarRoot) {
 
     topDashboardEl.innerHTML = `
       <div class="summary-grid">
-        <div class="summary-card">
+        <div class="summary-card summary-card-balance">
           <div class="summary-card-label">💰 口座残高合計</div>
           <div class="summary-card-value">${currency(totalBalance)}</div>
           <div class="summary-card-sub">${normalAccounts.length}口座の合計(借入金口座を除く)</div>
         </div>
-        <div class="summary-card">
+        <div class="summary-card summary-card-loan">
           <div class="summary-card-label">💳 ローン残高合計</div>
           <div class="summary-card-value danger">－${currency(totalLoan)}</div>
           <div class="summary-card-sub">${loanAccounts.length}口座の合計</div>
@@ -640,8 +640,8 @@ export function initTsucho(root, sidebarRoot) {
         ${realEstateSummaryCardsHtml()}
       </div>
       <div class="tsucho-section-grid">
-        ${normalAccounts.length ? `<div class="tsucho-section-card"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
-        ${loanAccounts.length ? `<div class="tsucho-section-card"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
+        ${normalAccounts.length ? `<div class="tsucho-section-card category-balance"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
+        ${loanAccounts.length ? `<div class="tsucho-section-card category-loan"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
         ${realEstateAssetSectionHtml()}
         ${realEstateTaxSectionHtml()}
       </div>

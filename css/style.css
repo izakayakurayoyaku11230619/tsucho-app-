@@ -213,6 +213,12 @@ select, input { font-family: inherit; }
   padding: 14px 16px;
 }
 .tsucho-section-card h3 { margin: 0 0 4px; font-size: 16px; }
+
+/* カテゴリごとに色分けして、枠が薄くて見づらい問題を解消する */
+.summary-card-balance, .tsucho-section-card.category-balance { border-left: 4px solid var(--color-primary); background: #eef4ff; }
+.summary-card-loan, .tsucho-section-card.category-loan { border-left: 4px solid var(--color-danger); background: #fdecec; }
+.summary-card-asset, .tsucho-section-card.category-asset { border-left: 4px solid var(--color-success); background: #e6faf3; }
+.summary-card-tax, .tsucho-section-card.category-tax { border-left: 4px solid var(--color-personal); background: #fef3e2; }
 .badge-status.status-unprocessed { background: #fef9c3; color: #92722a; }
 .badge-status.status-matched { background: #dcfce7; color: #166534; }
 
