@@ -7,6 +7,7 @@ import {
   getKnownAccounts, addKnownAccount, findKnownAccountByNumber, setAccountEntityType, setAccountKind,
   listBankAccountNamesInRecords, mergeBankAccountNames, findDuplicateGroups, listSourceFilesInRecords, listAccountSummaries,
   getVerifiedBalance, setVerifiedBalance, reassignSourceFileAccount, shiftSourceFileDateYears,
+  getRealEstateData,
 } from './storage.js';
 import { getApiKey, setApiKey, hasApiKey } from './settings.js';
 import { isBankStatementXlsx, parseBankStatementXlsx } from './xlsxReader.js';
@@ -463,6 +464,7 @@ export function initTsucho(root, sidebarRoot) {
   // --- トップ画面(口座残高合計・ローン残高合計。今後ここに必要な情報を追加していく) ---
   const topDashboardEl = root.querySelector('#tsucho-top-dashboard');
   const expandedLoanAccounts = new Set(); // 「内訳を見る」で開いたローン口座名(再描画をまたいで開閉状態を保持する)
+  const expandedRealEstateOwners = new Set(); // 「内訳を見る」で開いた所有者キー(不動産の物件一覧)
 
   function loanScheduleTableHtml(accountName, todayIso) {
     const rows = getTsuchoRecords()
@@ -482,6 +484,95 @@ export function initTsucho(root, sidebarRoot) {
         </tr>`;
       }).join('')}</tbody>
     </table>`;
+  }
+
+  function realEstatePropertyTableHtml(owner) {
+    if (!owner.properties?.length) return '<p class="empty-hint">物件データがありません。</p>';
+    return `<table class="data-table" style="margin:6px 0 14px">
+      <thead><tr><th>No</th><th>区分</th><th>所在地</th><th style="text-align:right">地積/床面積(㎡)</th><th style="text-align:right">評価額</th><th style="text-align:right">年税額相当</th></tr></thead>
+      <tbody>${owner.properties.map((p) => `
+        <tr>
+          <td>${p.no}</td>
+          <td>${escapeHtml(p.category)}</td>
+          <td>${escapeHtml(p.location)}</td>
+          <td style="text-align:right">${p.area ?? ''}</td>
+          <td style="text-align:right;white-space:nowrap">${currency(p.value)}</td>
+          <td style="text-align:right;white-space:nowrap">${currency(p.yearTaxTotal)}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+  }
+
+  /** 資産・固定資産税の合計サマリーカード(トップの上段カード群に混ぜて表示する)。 */
+  function realEstateSummaryCardsHtml() {
+    const data = getRealEstateData();
+    if (!data || !data.owners?.length) return '';
+    const totalValue = data.owners.reduce((sum, o) => sum + (o.landAssessed || 0) + (o.buildingAssessed || 0), 0);
+    const totalTax = data.owners.reduce((sum, o) => sum + (o.taxTotal || 0), 0);
+    return `
+      <div class="summary-card">
+        <div class="summary-card-label">🏠 土地・家屋 評価額合計</div>
+        <div class="summary-card-value">${currency(totalValue)}</div>
+        <div class="summary-card-sub">${data.year || ''}・${data.owners.length}名義の合計</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-card-label">🧾 固定資産税・都市計画税</div>
+        <div class="summary-card-value">${currency(totalTax)}</div>
+        <div class="summary-card-sub">${data.year || ''} 年税額合計</div>
+      </div>`;
+  }
+
+  /** 資産(土地・家屋)の内訳セクション本体(口座残高などと同じ、独立したカードとして表示する)。 */
+  function realEstateAssetSectionHtml() {
+    const data = getRealEstateData();
+    if (!data || !data.owners?.length) return '';
+    const ownerRow = (o) => {
+      const isExpanded = expandedRealEstateOwners.has(o.key);
+      const ownerValue = (o.landAssessed || 0) + (o.buildingAssessed || 0);
+      return `<div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--color-border)">
+          <span>${escapeHtml(o.label)}<button type="button" class="btn btn-ghost btn-sm" data-toggle-realestate-owner="${escapeAttr(o.key)}" style="margin-left:8px">${isExpanded ? '▲内訳を閉じる' : '▼内訳を見る'}</button></span>
+          <span style="text-align:right">
+            <span style="font-weight:700">${currency(ownerValue)}</span>
+            <div class="empty-hint" style="text-align:right;font-size:12px">土地${currency(o.landAssessed)} + 家屋${currency(o.buildingAssessed)}</div>
+          </span>
+        </div>
+        ${isExpanded ? realEstatePropertyTableHtml(o) : ''}
+      </div>`;
+    };
+    return `<div class="tsucho-section-card">
+      <h3>🏠 資産(土地・家屋)</h3>
+      ${data.owners.map(ownerRow).join('')}
+    </div>`;
+  }
+
+  /** 固定資産税・都市計画税の内訳セクション本体(所有者ごとの内訳＋期別納付予定を常時表示する)。 */
+  function realEstateTaxSectionHtml() {
+    const data = getRealEstateData();
+    if (!data || !data.owners?.length) return '';
+    const taxRow = (o) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--color-border)">
+      <span>${escapeHtml(o.label)}</span>
+      <span style="text-align:right">
+        <span style="font-weight:700">${currency(o.taxTotal)}</span>
+        <div class="empty-hint" style="text-align:right;font-size:12px">固定資産税${currency(o.propertyTax)} + 都市計画税${currency(o.cityPlanningTax)}</div>
+      </span>
+    </div>`;
+    const scheduleHtml = data.taxSchedule?.length ? `<table class="data-table" style="margin:10px 0 0">
+      <thead><tr><th>納期</th><th>納期限</th><th style="text-align:right">個人</th><th style="text-align:right">法人</th><th style="text-align:right">合計</th></tr></thead>
+      <tbody>${data.taxSchedule.map((s) => `
+        <tr>
+          <td>${escapeHtml(s.period)}</td>
+          <td style="white-space:nowrap">${s.dueDate}</td>
+          <td style="text-align:right;white-space:nowrap">${currency(s.personal)}</td>
+          <td style="text-align:right;white-space:nowrap">${currency(s.corporate)}</td>
+          <td style="text-align:right;white-space:nowrap">${currency(s.personal + s.corporate)}</td>
+        </tr>`).join('')}</tbody>
+    </table>` : '';
+    return `<div class="tsucho-section-card">
+      <h3>🧾 固定資産税・都市計画税</h3>
+      ${data.owners.map(taxRow).join('')}
+      <p class="empty-hint" style="margin:10px 0 0">期別納付予定(口座振替)</p>
+      ${scheduleHtml}
+    </div>`;
   }
 
   function renderTopDashboard() {
@@ -535,20 +626,25 @@ export function initTsucho(root, sidebarRoot) {
     }).join('');
 
     topDashboardEl.innerHTML = `
-      <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
-        <div class="summary-card" style="flex:1;min-width:220px">
+      <div class="summary-grid">
+        <div class="summary-card">
           <div class="summary-card-label">💰 口座残高合計</div>
           <div class="summary-card-value">${currency(totalBalance)}</div>
           <div class="summary-card-sub">${normalAccounts.length}口座の合計(借入金口座を除く)</div>
         </div>
-        <div class="summary-card" style="flex:1;min-width:220px">
+        <div class="summary-card">
           <div class="summary-card-label">💳 ローン残高合計</div>
           <div class="summary-card-value danger">－${currency(totalLoan)}</div>
           <div class="summary-card-sub">${loanAccounts.length}口座の合計</div>
         </div>
+        ${realEstateSummaryCardsHtml()}
       </div>
-      ${normalAccounts.length ? `<h3 style="margin:16px 0 4px">💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}` : ''}
-      ${loanAccounts.length ? `<h3 style="margin:16px 0 4px">💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}` : ''}
+      <div class="tsucho-section-grid">
+        ${normalAccounts.length ? `<div class="tsucho-section-card"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
+        ${loanAccounts.length ? `<div class="tsucho-section-card"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
+        ${realEstateAssetSectionHtml()}
+        ${realEstateTaxSectionHtml()}
+      </div>
     `;
 
     topDashboardEl.querySelectorAll('[data-toggle-loan-detail]').forEach((btn) => {
@@ -556,6 +652,15 @@ export function initTsucho(root, sidebarRoot) {
         const name = btn.dataset.toggleLoanDetail;
         if (expandedLoanAccounts.has(name)) expandedLoanAccounts.delete(name);
         else expandedLoanAccounts.add(name);
+        renderTopDashboard();
+      });
+    });
+
+    topDashboardEl.querySelectorAll('[data-toggle-realestate-owner]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.dataset.toggleRealestateOwner;
+        if (expandedRealEstateOwners.has(key)) expandedRealEstateOwners.delete(key);
+        else expandedRealEstateOwners.add(key);
         renderTopDashboard();
       });
     });

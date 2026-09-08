@@ -9,6 +9,7 @@ import { db } from './firebaseClient.js';
 
 const KNOWN_ACCOUNTS_DOC = doc(db, 'meta', 'knownAccounts');
 const VERIFIED_BALANCES_DOC = doc(db, 'meta', 'verifiedBalances');
+const REAL_ESTATE_DOC = doc(db, 'meta', 'realEstateAssets');
 const RECORDS_COLLECTION = collection(db, 'records');
 
 /**
@@ -51,20 +52,23 @@ async function commitInChunks(ops) {
  */
 export async function initTsuchoStorage() {
   try {
-    const [recordsSnap, knownSnap, verifiedSnap] = await Promise.all([
+    const [recordsSnap, knownSnap, verifiedSnap, realEstateSnap] = await Promise.all([
       getDocs(RECORDS_COLLECTION),
       getDoc(KNOWN_ACCOUNTS_DOC),
       getDoc(VERIFIED_BALANCES_DOC),
+      getDoc(REAL_ESTATE_DOC),
     ]);
     recordsCache = recordsSnap.docs.map((d) => d.data());
     persistedIds = new Set(recordsSnap.docs.map((d) => d.id));
     knownAccountsCache = knownSnap.exists() ? (knownSnap.data().list || []) : [];
     verifiedBalancesCache = verifiedSnap.exists() ? (verifiedSnap.data().data || {}) : {};
+    realEstateCache = realEstateSnap.exists() ? (realEstateSnap.data().data || null) : null;
   } catch (e) {
     console.error('tsucho-app: データの読み込みに失敗しました', e);
     recordsCache = [];
     knownAccountsCache = [];
     verifiedBalancesCache = {};
+    realEstateCache = null;
     alert('データの読み込みに失敗しました。通信環境をご確認のうえ、タブを開き直してください。');
   }
 }
@@ -117,6 +121,7 @@ export function flushPendingWrites() {
 // ---------------------------------------------------------------------------
 let knownAccountsCache = [];
 let verifiedBalancesCache = {};
+let realEstateCache = null;
 
 function saveKnownAccountsNow(list) {
   knownAccountsCache = list;
@@ -466,6 +471,31 @@ export function setVerifiedBalance(accountName, balance) {
   const all = { ...verifiedBalancesCache };
   all[trimmedName] = { balance: Number(balance) || 0, checkedAt: Date.now() };
   saveVerifiedBalancesNow(all);
+}
+
+// ---------------------------------------------------------------------------
+// Firestore: 所有不動産(土地・家屋)資産と固定資産税・都市計画税(年1回、手動で更新する静的データ)
+// ---------------------------------------------------------------------------
+/**
+ * @typedef {Object} RealEstateData
+ * @property {string} year 例: "令和7年度"
+ * @property {Array<{key:string, label:string, noticeNumber:string, landAssessed:number, buildingAssessed:number,
+ *   propertyTax:number, cityPlanningTax:number, taxTotal:number,
+ *   properties:Array<{no:number, category:string, location:string, buildingNo:string, area:number, useType:string,
+ *     builtYear:string, value:number, propertyTaxAmount:number, cityPlanningTaxAmount:number, yearTaxTotal:number, note:string}>
+ * }>} owners
+ * @property {Array<{period:string, dueDate:string, personal:number, corporate:number}>} taxSchedule
+ */
+export function getRealEstateData() {
+  return realEstateCache;
+}
+
+export function setRealEstateData(data) {
+  realEstateCache = data;
+  setDoc(REAL_ESTATE_DOC, { data }).catch((e) => {
+    console.error('tsucho-app: 保存に失敗しました(real-estate)', e);
+    alert(`保存に失敗しました(real-estate): ${e?.code || ''} ${e?.message || e}`);
+  });
 }
 
 export function uid(prefix = 'id') {
