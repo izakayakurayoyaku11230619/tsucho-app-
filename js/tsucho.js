@@ -523,6 +523,34 @@ export function initTsucho(root, sidebarRoot) {
       </div>`;
   }
 
+  /** 土地の地区別内訳(所在地の頭の地名部分でグループ化し、評価額・固定資産税相当額を集計する)。 */
+  function realEstateLandAreaTableHtml(data) {
+    const groups = {};
+    for (const o of data.owners) {
+      for (const p of o.properties) {
+        if (p.category !== '土地') continue;
+        const areaMatch = String(p.location || '').match(/^(\D+)/);
+        const area = areaMatch ? areaMatch[1] : p.location;
+        if (!groups[area]) groups[area] = { area, count: 0, value: 0, propertyTax: 0 };
+        groups[area].count += 1;
+        groups[area].value += p.value || 0;
+        groups[area].propertyTax += p.propertyTaxAmount || 0;
+      }
+    }
+    const rows = Object.values(groups).sort((a, b) => b.value - a.value);
+    if (!rows.length) return '';
+    return `<table class="data-table" style="margin:6px 0 0">
+      <thead><tr><th>地区</th><th style="text-align:right">筆数</th><th style="text-align:right">評価額</th><th style="text-align:right">固定資産税相当額</th></tr></thead>
+      <tbody>${rows.map((r) => `
+        <tr>
+          <td>${escapeHtml(r.area)}</td>
+          <td style="text-align:right">${r.count}筆</td>
+          <td style="text-align:right;white-space:nowrap">${currency(r.value)}</td>
+          <td style="text-align:right;white-space:nowrap">${currency(r.propertyTax)}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+  }
+
   /** 資産(土地・家屋)の内訳セクション本体(口座残高などと同じ、独立したカードとして表示する)。 */
   function realEstateAssetSectionHtml() {
     const data = getRealEstateData();
@@ -544,6 +572,8 @@ export function initTsucho(root, sidebarRoot) {
     return `<div class="tsucho-section-card category-asset">
       <h3>🏠 資産(土地・家屋)</h3>
       ${data.owners.map(ownerRow).join('')}
+      <p class="empty-hint" style="margin:10px 0 0">🌍 土地の地区別内訳(評価額・固定資産税相当額)</p>
+      ${realEstateLandAreaTableHtml(data)}
     </div>`;
   }
 
