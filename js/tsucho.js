@@ -7,7 +7,7 @@ import {
   getKnownAccounts, addKnownAccount, findKnownAccountByNumber, setAccountEntityType, setAccountKind,
   listBankAccountNamesInRecords, mergeBankAccountNames, findDuplicateGroups, listSourceFilesInRecords, listAccountSummaries,
   getVerifiedBalance, setVerifiedBalance, reassignSourceFileAccount, shiftSourceFileDateYears,
-  getRealEstateData,
+  getRealEstateData, listBackupSnapshots, restoreFromBackup,
 } from './storage.js';
 import { getApiKey, setApiKey, hasApiKey } from './settings.js';
 import { isBankStatementXlsx, parseBankStatementXlsx } from './xlsxReader.js';
@@ -325,10 +325,18 @@ export function initTsucho(root, sidebarRoot) {
       <button type="button" class="btn btn-secondary" id="tsucho-show-account-manage-top">✏️ 口座名を変更</button>
       <button type="button" class="btn btn-secondary" id="btn-export-backup" title="全データをJSONで書き出し">💾 バックアップ</button>
       <button type="button" class="btn btn-secondary" id="btn-import-backup" title="バックアップから復元(現在のデータを上書きします)">📂 復元</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-show-backup-history" title="自動で保存されている過去のバックアップから復元します">☁️ 自動保存履歴</button>
       <span id="tsucho-current-file-label" style="font-size:14px;color:var(--color-text-muted)"></span>
     </div>
 
     <div id="tsucho-view-top">
+    <div class="panel hidden" id="tsucho-backup-history-panel">
+      <div class="panel-header">
+        <h2>☁️ 自動保存履歴</h2>
+      </div>
+      <p class="empty-hint" style="padding-top:0">1日1回、また口座やファイルを削除する直前に自動で保存されるバックアップです。誤って消してしまった場合、ここから直前の状態に復元できます(復元する前の状態も自動で保存されるので、復元し直すこともできます)。</p>
+      <div id="tsucho-backup-history-list"></div>
+    </div>
     <div class="panel">
       <div class="panel-header">
         <h2>🏠 トップ</h2>
@@ -708,6 +716,59 @@ export function initTsucho(root, sidebarRoot) {
       });
     });
   }
+
+  // --- 自動保存履歴(誤操作でデータが消えたときの復元用) ---
+  const backupHistoryPanel = root.querySelector('#tsucho-backup-history-panel');
+  const backupHistoryListEl = root.querySelector('#tsucho-backup-history-list');
+
+  async function renderBackupHistory() {
+    backupHistoryListEl.innerHTML = '<p class="empty-hint" style="padding-top:0">読み込み中…</p>';
+    let snapshots;
+    try {
+      snapshots = await listBackupSnapshots();
+    } catch (e) {
+      backupHistoryListEl.innerHTML = `<p class="empty-hint" style="padding-top:0">読み込みに失敗しました: ${escapeHtml(e.message || String(e))}</p>`;
+      return;
+    }
+    if (!snapshots.length) {
+      backupHistoryListEl.innerHTML = '<p class="empty-hint" style="padding-top:0">まだバックアップがありません(次回起動時から自動で保存されます)。</p>';
+      return;
+    }
+    backupHistoryListEl.innerHTML = `<table class="data-table">
+      <thead><tr><th>日時</th><th>内容</th><th style="text-align:right">件数</th><th></th></tr></thead>
+      <tbody>${snapshots.map((s) => `
+        <tr>
+          <td style="white-space:nowrap">${new Date(s.createdAt).toLocaleString('ja-JP')}</td>
+          <td>${escapeHtml(s.label)}</td>
+          <td style="text-align:right">${s.recordCount}件</td>
+          <td><button type="button" class="btn btn-secondary btn-sm" data-restore-backup="${escapeAttr(s.id)}">この時点に復元</button></td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+
+    backupHistoryListEl.querySelectorAll('[data-restore-backup]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.restoreBackup;
+        if (!confirm('このバックアップの内容で、現在の明細・口座設定を丸ごと上書きします。よろしいですか？(念のため、復元する前の状態も自動で保存されます)')) return;
+        btn.disabled = true;
+        try {
+          await restoreFromBackup(id);
+          alert('復元しました。');
+          renderAll();
+          renderBackupHistory();
+        } catch (e) {
+          alert(`復元に失敗しました: ${e.message || e}`);
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  root.querySelector('#tsucho-show-backup-history').addEventListener('click', () => {
+    setTsuchoTab('top');
+    backupHistoryPanel.classList.remove('hidden');
+    renderBackupHistory();
+    backupHistoryPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 
   // --- 重複チェック(保存済みデータ全体を対象に、日付・金額・区分・摘要・残高が完全一致するものを探す) ---
   const duplicateCheckPanel = root.querySelector('#tsucho-duplicate-check-panel');

@@ -11,6 +11,8 @@ const KNOWN_ACCOUNTS_DOC = doc(db, 'meta', 'knownAccounts');
 const VERIFIED_BALANCES_DOC = doc(db, 'meta', 'verifiedBalances');
 const REAL_ESTATE_DOC = doc(db, 'meta', 'realEstateAssets');
 const RECORDS_COLLECTION = collection(db, 'records');
+const BACKUPS_COLLECTION = collection(db, 'backups');
+const MAX_BACKUPS_TO_KEEP = 30;
 
 /**
  * @typedef {Object} TsuchoTxn 通帳仕分けで確定させた1明細行
@@ -70,7 +72,11 @@ export async function initTsuchoStorage() {
     verifiedBalancesCache = {};
     realEstateCache = null;
     alert('データの読み込みに失敗しました。通信環境をご確認のうえ、タブを開き直してください。');
+    return;
   }
+  // 起動のたびに、その日まだ日次バックアップを取っていなければ1つ取っておく(誤操作でデータが
+  // 消えたときの復元用の保険。起動を遅らせないよう、完了を待たずに裏で実行する)。
+  writeBackupSnapshot('自動(日次)', { dailyKey: new Date().toISOString().slice(0, 10) });
 }
 
 export function getTsuchoRecords() {
@@ -139,6 +145,66 @@ function saveVerifiedBalancesNow(data) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Firestore: 自動バックアップ(誤操作でデータが消えてしまった場合の復元用の保険)
+// 起動のたびに1日1回の日次スナップショットを、また削除系の操作の直前にも自動でスナップショットを
+// backupsコレクションに保存しておく。バックアップの保存に失敗しても、本来の操作は止めない。
+// ---------------------------------------------------------------------------
+async function writeBackupSnapshot(label, { dailyKey } = {}) {
+  try {
+    const id = dailyKey ? `daily-${dailyKey}` : `manual-${uid('bk')}`;
+    await setDoc(doc(BACKUPS_COLLECTION, id), {
+      createdAt: Date.now(),
+      label,
+      recordCount: (recordsCache ?? []).length,
+      records: recordsCache ?? [],
+      knownAccounts: knownAccountsCache,
+      verifiedBalances: verifiedBalancesCache,
+      realEstateData: realEstateCache,
+    });
+    pruneOldBackups();
+  } catch (e) {
+    console.error('tsucho-app: 自動バックアップの保存に失敗しました', e);
+  }
+}
+
+async function pruneOldBackups() {
+  try {
+    const snap = await getDocs(BACKUPS_COLLECTION);
+    const docs = snap.docs.map((d) => ({ id: d.id, createdAt: d.data().createdAt || 0 }));
+    if (docs.length <= MAX_BACKUPS_TO_KEEP) return;
+    docs.sort((a, b) => b.createdAt - a.createdAt);
+    const toDelete = docs.slice(MAX_BACKUPS_TO_KEEP);
+    await commitInChunks(toDelete.map((d) => ({ type: 'delete', ref: doc(BACKUPS_COLLECTION, d.id) })));
+  } catch (e) {
+    console.error('tsucho-app: 古いバックアップの整理に失敗しました', e);
+  }
+}
+
+/** 直近のバックアップ一覧(新しい順)を返す。復元画面用。 */
+export async function listBackupSnapshots() {
+  const snap = await getDocs(BACKUPS_COLLECTION);
+  return snap.docs
+    .map((d) => {
+      const data = d.data();
+      return { id: d.id, createdAt: data.createdAt || 0, label: data.label || '', recordCount: data.recordCount ?? (data.records || []).length };
+    })
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** 指定したバックアップの内容で、現在のデータを丸ごと置き換える(復元)。復元する前にも、念のため今の状態を自動保存しておく。 */
+export async function restoreFromBackup(id) {
+  const snap = await getDoc(doc(BACKUPS_COLLECTION, id));
+  if (!snap.exists()) throw new Error('指定のバックアップが見つかりません');
+  await writeBackupSnapshot(`復元前の自動保存(${id} へ復元する直前)`);
+  const data = snap.data();
+  saveTsuchoRecords(data.records || []);
+  saveKnownAccountsNow(data.knownAccounts || []);
+  saveVerifiedBalancesNow(data.verifiedBalances || {});
+  setRealEstateData(data.realEstateData || null);
+  flushPendingWrites();
+}
+
 /** 同じsourceFileNameの既存レコードを入れ替えて保存する(同じファイルを再度「保存」した場合の重複防止)。 */
 export function upsertTsuchoRecords(newRecords) {
   const sourceFileNames = new Set(newRecords.map((r) => r.sourceFileName));
@@ -147,11 +213,13 @@ export function upsertTsuchoRecords(newRecords) {
 }
 
 export function deleteTsuchoRecordsBySource(sourceFileName) {
+  writeBackupSnapshot(`削除前の自動保存(ファイル「${sourceFileName}」を削除する直前)`);
   saveTsuchoRecords(getTsuchoRecords().filter((r) => r.sourceFileName !== sourceFileName));
 }
 
 /** 決済口座名が一致する明細を全部削除する(口座を丸ごと消して取り込み直したい場合用)。 */
 export function deleteTsuchoRecordsByAccountName(accountName) {
+  writeBackupSnapshot(`削除前の自動保存(口座「${accountName}」を削除する直前)`);
   saveTsuchoRecords(getTsuchoRecords().filter((r) => r.bankAccountName !== accountName));
 }
 
