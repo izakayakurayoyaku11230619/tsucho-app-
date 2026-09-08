@@ -14,6 +14,7 @@ import { isBankStatementXlsx, parseBankStatementXlsx } from './xlsxReader.js';
 import { analyzeBankStatementDocument } from './tsuchoAnalyzer.js';
 import { classifyTsuchoTxn, TSUCHO_CATEGORY_OPTIONS, TSUCHO_TAX_OPTIONS, defaultTaxForCategory } from './tsuchoRules.js';
 import { downloadXlsx } from './xlsxWriter.js';
+import { generateAssetReportPptx } from './pptxReport.js';
 
 const EXPORT_HEADERS = ['発生日', '取引区分（入金/出金）', '勘定科目', '決済口座', '取引先（摘要）', '品目・備考', '税区分', '金額'];
 const NO_BANK_LABEL = '(口座・カード未設定)';
@@ -326,6 +327,7 @@ export function initTsucho(root, sidebarRoot) {
       <button type="button" class="btn btn-secondary" id="btn-export-backup" title="全データをJSONで書き出し">💾 バックアップ</button>
       <button type="button" class="btn btn-secondary" id="btn-import-backup" title="バックアップから復元(現在のデータを上書きします)">📂 復元</button>
       <button type="button" class="btn btn-secondary" id="tsucho-show-backup-history" title="自動で保存されている過去のバックアップから復元します">☁️ 自動保存履歴</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-export-pptx" title="口座残高・ローン・資産・固定資産税をまとめたPowerPointを作成します">📊 資産レポート(PowerPoint)</button>
       <span id="tsucho-current-file-label" style="font-size:14px;color:var(--color-text-muted)"></span>
     </div>
 
@@ -768,6 +770,21 @@ export function initTsucho(root, sidebarRoot) {
     backupHistoryPanel.classList.remove('hidden');
     renderBackupHistory();
     backupHistoryPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  root.querySelector('#tsucho-export-pptx').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '📊 作成中…';
+    try {
+      await generateAssetReportPptx();
+    } catch (err) {
+      alert(`PowerPointの作成に失敗しました: ${err.message || err}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
   });
 
   // --- 重複チェック(保存済みデータ全体を対象に、日付・金額・区分・摘要・残高が完全一致するものを探す) ---
