@@ -467,7 +467,9 @@ export function initTsucho(root, sidebarRoot) {
   const topDashboardEl = root.querySelector('#tsucho-top-dashboard');
   const expandedLoanAccounts = new Set(); // 「内訳を見る」で開いたローン口座名(再描画をまたいで開閉状態を保持する)
   const expandedRealEstateOwners = new Set(); // 「内訳を見る」で開いた所有者キー(不動産の物件一覧)
-  const expandedTopSections = new Set(); // 上段サマリーカードをタップして開いたカテゴリ(balance/loan/asset/tax)
+  // 上段サマリーカードをタップして開いたカテゴリ(balance/loan/asset/tax)。同時に1つだけ開く
+  // アコーディオン式(別のカードを押すと前のは閉じる。開いているカードをもう一度押すと閉じる)。
+  let expandedTopSection = null;
 
   function loanScheduleTableHtml(accountName, todayIso) {
     const rows = getTsuchoRecords()
@@ -512,12 +514,12 @@ export function initTsucho(root, sidebarRoot) {
     const totalValue = data.owners.reduce((sum, o) => sum + (o.landAssessed || 0) + (o.buildingAssessed || 0), 0);
     const totalTax = data.owners.reduce((sum, o) => sum + (o.taxTotal || 0), 0);
     return `
-      <div class="summary-card summary-card-asset summary-card-clickable ${expandedTopSections.has('asset') ? 'active' : ''}" data-toggle-section="asset">
+      <div class="summary-card summary-card-asset summary-card-clickable ${expandedTopSection === 'asset' ? 'active' : ''}" data-toggle-section="asset">
         <div class="summary-card-label">🏠 土地・家屋 評価額合計</div>
         <div class="summary-card-value">${currency(totalValue)}</div>
         <div class="summary-card-sub">${data.year || ''}・${data.owners.length}名義の合計(タップで内訳)</div>
       </div>
-      <div class="summary-card summary-card-tax summary-card-clickable ${expandedTopSections.has('tax') ? 'active' : ''}" data-toggle-section="tax">
+      <div class="summary-card summary-card-tax summary-card-clickable ${expandedTopSection === 'tax' ? 'active' : ''}" data-toggle-section="tax">
         <div class="summary-card-label">🧾 固定資産税・都市計画税</div>
         <div class="summary-card-value">${currency(totalTax)}</div>
         <div class="summary-card-sub">${data.year || ''} 年税額合計(タップで内訳)</div>
@@ -660,12 +662,12 @@ export function initTsucho(root, sidebarRoot) {
 
     topDashboardEl.innerHTML = `
       <div class="summary-grid">
-        <div class="summary-card summary-card-balance summary-card-clickable ${expandedTopSections.has('balance') ? 'active' : ''}" data-toggle-section="balance">
+        <div class="summary-card summary-card-balance summary-card-clickable ${expandedTopSection === 'balance' ? 'active' : ''}" data-toggle-section="balance">
           <div class="summary-card-label">💰 口座残高合計</div>
           <div class="summary-card-value">${currency(totalBalance)}</div>
           <div class="summary-card-sub">${normalAccounts.length}口座の合計(借入金口座を除く・タップで内訳)</div>
         </div>
-        <div class="summary-card summary-card-loan summary-card-clickable ${expandedTopSections.has('loan') ? 'active' : ''}" data-toggle-section="loan">
+        <div class="summary-card summary-card-loan summary-card-clickable ${expandedTopSection === 'loan' ? 'active' : ''}" data-toggle-section="loan">
           <div class="summary-card-label">💳 ローン残高合計</div>
           <div class="summary-card-value danger">－${currency(totalLoan)}</div>
           <div class="summary-card-sub">${loanAccounts.length}口座の合計(タップで内訳)</div>
@@ -673,18 +675,17 @@ export function initTsucho(root, sidebarRoot) {
         ${realEstateSummaryCardsHtml()}
       </div>
       <div class="tsucho-section-grid">
-        ${normalAccounts.length && expandedTopSections.has('balance') ? `<div class="tsucho-section-card category-balance"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
-        ${loanAccounts.length && expandedTopSections.has('loan') ? `<div class="tsucho-section-card category-loan"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
-        ${expandedTopSections.has('asset') ? realEstateAssetSectionHtml() : ''}
-        ${expandedTopSections.has('tax') ? realEstateTaxSectionHtml() : ''}
+        ${normalAccounts.length && expandedTopSection === 'balance' ? `<div class="tsucho-section-card category-balance"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
+        ${loanAccounts.length && expandedTopSection === 'loan' ? `<div class="tsucho-section-card category-loan"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
+        ${expandedTopSection === 'asset' ? realEstateAssetSectionHtml() : ''}
+        ${expandedTopSection === 'tax' ? realEstateTaxSectionHtml() : ''}
       </div>
     `;
 
     topDashboardEl.querySelectorAll('[data-toggle-section]').forEach((card) => {
       card.addEventListener('click', () => {
         const key = card.dataset.toggleSection;
-        if (expandedTopSections.has(key)) expandedTopSections.delete(key);
-        else expandedTopSections.add(key);
+        expandedTopSection = expandedTopSection === key ? null : key;
         renderTopDashboard();
       });
     });
