@@ -467,6 +467,7 @@ export function initTsucho(root, sidebarRoot) {
   const topDashboardEl = root.querySelector('#tsucho-top-dashboard');
   const expandedLoanAccounts = new Set(); // 「内訳を見る」で開いたローン口座名(再描画をまたいで開閉状態を保持する)
   const expandedRealEstateOwners = new Set(); // 「内訳を見る」で開いた所有者キー(不動産の物件一覧)
+  const expandedTopSections = new Set(); // 上段サマリーカードをタップして開いたカテゴリ(balance/loan/asset/tax)
 
   function loanScheduleTableHtml(accountName, todayIso) {
     const rows = getTsuchoRecords()
@@ -511,15 +512,15 @@ export function initTsucho(root, sidebarRoot) {
     const totalValue = data.owners.reduce((sum, o) => sum + (o.landAssessed || 0) + (o.buildingAssessed || 0), 0);
     const totalTax = data.owners.reduce((sum, o) => sum + (o.taxTotal || 0), 0);
     return `
-      <div class="summary-card summary-card-asset">
+      <div class="summary-card summary-card-asset summary-card-clickable ${expandedTopSections.has('asset') ? 'active' : ''}" data-toggle-section="asset">
         <div class="summary-card-label">🏠 土地・家屋 評価額合計</div>
         <div class="summary-card-value">${currency(totalValue)}</div>
-        <div class="summary-card-sub">${data.year || ''}・${data.owners.length}名義の合計</div>
+        <div class="summary-card-sub">${data.year || ''}・${data.owners.length}名義の合計(タップで内訳)</div>
       </div>
-      <div class="summary-card summary-card-tax">
+      <div class="summary-card summary-card-tax summary-card-clickable ${expandedTopSections.has('tax') ? 'active' : ''}" data-toggle-section="tax">
         <div class="summary-card-label">🧾 固定資産税・都市計画税</div>
         <div class="summary-card-value">${currency(totalTax)}</div>
-        <div class="summary-card-sub">${data.year || ''} 年税額合計</div>
+        <div class="summary-card-sub">${data.year || ''} 年税額合計(タップで内訳)</div>
       </div>`;
   }
 
@@ -659,25 +660,34 @@ export function initTsucho(root, sidebarRoot) {
 
     topDashboardEl.innerHTML = `
       <div class="summary-grid">
-        <div class="summary-card summary-card-balance">
+        <div class="summary-card summary-card-balance summary-card-clickable ${expandedTopSections.has('balance') ? 'active' : ''}" data-toggle-section="balance">
           <div class="summary-card-label">💰 口座残高合計</div>
           <div class="summary-card-value">${currency(totalBalance)}</div>
-          <div class="summary-card-sub">${normalAccounts.length}口座の合計(借入金口座を除く)</div>
+          <div class="summary-card-sub">${normalAccounts.length}口座の合計(借入金口座を除く・タップで内訳)</div>
         </div>
-        <div class="summary-card summary-card-loan">
+        <div class="summary-card summary-card-loan summary-card-clickable ${expandedTopSections.has('loan') ? 'active' : ''}" data-toggle-section="loan">
           <div class="summary-card-label">💳 ローン残高合計</div>
           <div class="summary-card-value danger">－${currency(totalLoan)}</div>
-          <div class="summary-card-sub">${loanAccounts.length}口座の合計</div>
+          <div class="summary-card-sub">${loanAccounts.length}口座の合計(タップで内訳)</div>
         </div>
         ${realEstateSummaryCardsHtml()}
       </div>
       <div class="tsucho-section-grid">
-        ${normalAccounts.length ? `<div class="tsucho-section-card category-balance"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
-        ${loanAccounts.length ? `<div class="tsucho-section-card category-loan"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
-        ${realEstateAssetSectionHtml()}
-        ${realEstateTaxSectionHtml()}
+        ${normalAccounts.length && expandedTopSections.has('balance') ? `<div class="tsucho-section-card category-balance"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
+        ${loanAccounts.length && expandedTopSections.has('loan') ? `<div class="tsucho-section-card category-loan"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
+        ${expandedTopSections.has('asset') ? realEstateAssetSectionHtml() : ''}
+        ${expandedTopSections.has('tax') ? realEstateTaxSectionHtml() : ''}
       </div>
     `;
+
+    topDashboardEl.querySelectorAll('[data-toggle-section]').forEach((card) => {
+      card.addEventListener('click', () => {
+        const key = card.dataset.toggleSection;
+        if (expandedTopSections.has(key)) expandedTopSections.delete(key);
+        else expandedTopSections.add(key);
+        renderTopDashboard();
+      });
+    });
 
     topDashboardEl.querySelectorAll('[data-toggle-loan-detail]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1056,8 +1066,14 @@ export function initTsucho(root, sidebarRoot) {
       return;
     }
 
+    // ローン口座(借入金)は、銀行がバラバラでも見分けやすいよう「💳 ローン残高」として別枠にまとめる
+    // (通常口座の銀行別グループには入れない)。だらだら横に長くならないよう、他の銀行グループと同じ
+    // 縦積みのリスト表示に揃える。
+    const normalAccountsForSidebar = accounts.filter((a) => a.accountKind !== '借入金');
+    const loanAccountsForSidebar = accounts.filter((a) => a.accountKind === '借入金');
+
     const byGroup = {};
-    for (const a of accounts) {
+    for (const a of normalAccountsForSidebar) {
       const key = bankNameOf(a.name);
       (byGroup[key] ??= []).push(a);
     }
@@ -1065,7 +1081,7 @@ export function initTsucho(root, sidebarRoot) {
     // 選択(クリックで口座を選ぶ)専用の一覧。誤って消してしまわないよう、削除ボタンはここには置かない
     // (削除は下の「⚙️ 口座を管理」から明示的に行う)。
     // 口座が1つしかない銀行、または法人/個人で絞り込み中は、開閉の意味が無いので常に展開した状態で表示する。
-    accountButtonsEl.innerHTML = Object.entries(byGroup).map(([bank, list]) => {
+    const bankGroupsHtml = Object.entries(byGroup).map(([bank, list]) => {
       const expanded = list.length === 1 || !!state.sidebarEntityFilter || state.expandedBankGroups.has(bank);
       return `
       <div class="account-group">
@@ -1078,6 +1094,30 @@ export function initTsucho(root, sidebarRoot) {
           <button type="button" class="account-btn ${a.name === state.activeAccount ? 'active' : ''}" data-select-account="${escapeAttr(a.name)}" title="${escapeAttr(a.name)}${a.accountNumber ? ` (口座番号: ${a.accountNumber})` : ''}">${escapeHtml(accountLabelWithinGroup(a.name, bank))}${a.accountNumber ? ' 🔗' : ''}</button>`).join('') : ''}
       </div>`;
     }).join('');
+
+    const LOAN_GROUP_KEY = '💳 ローン残高';
+    const loanExpanded = loanAccountsForSidebar.length <= 1 || !!state.sidebarEntityFilter || state.expandedBankGroups.has(LOAN_GROUP_KEY);
+    const loanGroupHtml = loanAccountsForSidebar.length ? `
+      <div class="account-group">
+        <button type="button" class="account-group-label" data-toggle-group="${escapeAttr(LOAN_GROUP_KEY)}" style="display:flex;align-items:center;gap:4px;width:100%;background:none;border:none;cursor:pointer;text-align:left">
+          <span>${loanAccountsForSidebar.length > 1 ? (loanExpanded ? '▼' : '▶') : ''}</span>
+          <span>${LOAN_GROUP_KEY}</span>
+          <span style="color:var(--color-text-muted);font-weight:400">(${loanAccountsForSidebar.length}件)</span>
+        </button>
+        ${loanExpanded ? loanAccountsForSidebar.map((a) => `
+          <button type="button" class="account-btn ${a.name === state.activeAccount ? 'active' : ''}" data-select-account="${escapeAttr(a.name)}" title="${escapeAttr(a.name)}${a.accountNumber ? ` (口座番号: ${a.accountNumber})` : ''}">${escapeHtml(a.name)}${a.accountNumber ? ' 🔗' : ''}</button>`).join('') : ''}
+      </div>` : '';
+
+    // 「資産」「固定資産税」はアップロード対象の口座ではなく静的な集計データなので、押すとトップ画面の
+    // 該当カードへジャンプするだけの案内行として、縦積みのまま追加する(横に広がらないように)。
+    const realEstateData = getRealEstateData();
+    const infoRowsHtml = realEstateData ? `
+      <div class="account-group">
+        <button type="button" class="account-btn" data-jump-top-section="asset" style="width:100%;text-align:left">🏠 資産(土地・家屋)</button>
+        <button type="button" class="account-btn" data-jump-top-section="tax" style="width:100%;text-align:left">🧾 固定資産税・都市計画税</button>
+      </div>` : '';
+
+    accountButtonsEl.innerHTML = bankGroupsHtml + loanGroupHtml + infoRowsHtml;
 
     accountButtonsEl.querySelectorAll('[data-toggle-group]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -1098,6 +1138,13 @@ export function initTsucho(root, sidebarRoot) {
         state.selectedAccount = name;
         renderBankPanel();
         setTsuchoTab('list');
+      });
+    });
+
+    accountButtonsEl.querySelectorAll('[data-jump-top-section]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        setTsuchoTab('top');
+        root.querySelector('#tsucho-top-dashboard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
   }
