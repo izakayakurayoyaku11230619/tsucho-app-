@@ -259,13 +259,13 @@ export async function generateAssetReportPptx() {
   if (realEstateOwners.length) {
     const s = pres.addSlide();
     s.background = { color: WHITE };
-    sectionHeader(s, { emoji: '🏠', color: C_ASSET, title: '資産（土地・家屋）', sub: `${fiscalYear} 課税標準額ベース合計 ${yen(totalRealEstate)}` });
+    sectionHeader(s, { emoji: '🏠', color: C_ASSET, title: '資産（土地・家屋）', sub: `${fiscalYear} 評価額合計 ${yen(totalRealEstate)}` });
     realEstateOwners.forEach((o, i) => {
       const x = 0.6 + i * 6.13;
       statCard(s, { x, y: 1.55, w: 5.9, h: 1.7, label: o.label, value: yen(o.total), accent: C_ASSET, valueSize: 25 });
       s.addText(`土地 ${yen(o.land)}　＋　家屋 ${yen(o.building)}`, { x: x + 0.28, y: 2.75, w: 5.4, h: 0.3, isTextBox: true, margin: 0, fontFace: BODY, fontSize: 11, color: TEXT_MUTED });
     });
-    s.addText('土地・家屋 構成比（課税標準額ベース）', { x: 0.6, y: 3.55, w: 6, h: 0.35, isTextBox: true, margin: 0, fontFace: HEAD, fontSize: 15, bold: true, color: NAVY });
+    s.addText('土地・家屋 構成比（評価額ベース）', { x: 0.6, y: 3.55, w: 6, h: 0.35, isTextBox: true, margin: 0, fontFace: HEAD, fontSize: 15, bold: true, color: NAVY });
     s.addChart(pres.ChartType.doughnut, [{ name: '構成', labels: ['土地', '家屋'], values: [totalLandAssessed, totalBuildingAssessed] }], {
       x: 0.6, y: 3.9, w: 5.6, h: 3.2, chartColors: [C_ASSET, '8FCBAE'],
       showLegend: true, legendPos: 'b', legendFontSize: 11, legendFontFace: BODY, legendColor: TEXT_DARK,
