@@ -479,6 +479,7 @@ export function initTsucho(root, sidebarRoot) {
   const expandedRealEstateOwners = new Set(); // 「内訳を見る」で開いた所有者キー(不動産の物件一覧)
   // 上段サマリーカードをタップして開いたカテゴリ(balance/loan/asset/tax)。同時に1つだけ開く
   // アコーディオン式(別のカードを押すと前のは閉じる。開いているカードをもう一度押すと閉じる)。
+  // 何も選んでいないとき(null)は、口座残高とローン残高の内訳を並べて最初から見せる(真ん中が空かないように)
   let expandedTopSection = null;
 
   function loanScheduleTableHtml(accountName, todayIso) {
@@ -687,8 +688,8 @@ export function initTsucho(root, sidebarRoot) {
         ${realEstateSummaryCardsHtml()}
       </div>
       <div class="tsucho-section-grid">
-        ${normalAccounts.length && expandedTopSection === 'balance' ? `<div class="tsucho-section-card category-balance"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
-        ${loanAccounts.length && expandedTopSection === 'loan' ? `<div class="tsucho-section-card category-loan"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
+        ${normalAccounts.length && (expandedTopSection === 'balance' || expandedTopSection === null) ? `<div class="tsucho-section-card category-balance"><h3>💰 口座残高</h3>${bankGroupHtml(normalAccounts, { isLoan: false })}</div>` : ''}
+        ${loanAccounts.length && (expandedTopSection === 'loan' || expandedTopSection === null) ? `<div class="tsucho-section-card category-loan"><h3>💳 ローン残高</h3>${bankGroupHtml(loanAccounts, { isLoan: true })}</div>` : ''}
         ${expandedTopSection === 'asset' ? realEstateAssetSectionHtml() : ''}
         ${expandedTopSection === 'tax' ? realEstateTaxSectionHtml() : ''}
       </div>
