@@ -32,6 +32,18 @@ export function initLayout3() {
   const nav = document.getElementById('l3-nav');
   const body = document.getElementById('l3-main-body');
   const click = (id) => document.getElementById(id)?.click();
+
+  // ブラウザに古いindex.html(口座一覧が右の列にある版)が残っていたときも、左メニューの下へ移す
+  if (!document.querySelector('.l3-accounts')) {
+    const list = document.getElementById('account-sidebar');
+    const box = document.createElement('div');
+    box.className = 'l3-accounts';
+    box.innerHTML = '<div class="l3-accounts-head">口座<span>押すとその口座の明細へ</span></div>';
+    nav.after(box);
+    if (list) box.appendChild(list);
+    document.querySelector('.l3-right')?.remove();
+    layout.style.gridTemplateColumns = '';
+  }
   let lastKey = 'top';
 
   nav.innerHTML = NAV.map((n) => (n.sep

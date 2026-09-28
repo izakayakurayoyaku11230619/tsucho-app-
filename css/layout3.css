@@ -78,6 +78,8 @@ body { overflow: hidden; }
 .l3-accounts .btn-primary { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.3); }
 .l3-accounts .btn-primary:hover { background: rgba(255,255,255,.22); }
 .collapsed .l3-accounts { display: none; }
+/* ブラウザに古いindex.html(口座一覧の場所が無い版)が残っていても、メニューの下が空かないようにする */
+.l3-sidebar:not(:has(.l3-accounts)) .l3-nav { flex: 1; }
 .l3-scrim { display: none; }
 
 @media (max-width: 1150px) {
