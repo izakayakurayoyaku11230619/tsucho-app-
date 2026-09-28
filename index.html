@@ -5,27 +5,59 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>通帳仕分け(freee取込用Excel作成)</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/layout3.css">
 <link rel="icon" href="icon-512.png">
 <link rel="apple-touch-icon" href="icon-512.png">
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="通帳仕分け">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#2563eb">
+<meta name="theme-color" content="#1E3A8A">
 </head>
 <body>
-<header class="app-header">
-  <div class="header-row">
-    <h1 class="app-title">通帳仕分け(freee取込用Excel作成)</h1>
-    <input type="file" id="backup-file-input" accept="application/json,.json" hidden>
-  </div>
-</header>
+<!-- 全アプリ共通の3列: 左=メニュー / 中央=作業画面 / 右=口座の一覧(ここがスクロールする) -->
+<div class="l3-layout" id="l3-layout">
+  <aside class="l3-sidebar" aria-label="メニュー">
+    <div class="l3-brand">
+      <img class="l3-brand-mark" src="icon-512.png" alt="">
+      <div class="l3-brand-name">通帳仕分け<small>freee取込用Excel作成</small></div>
+    </div>
+    <nav class="l3-nav" id="l3-nav"></nav>
+    <button type="button" class="l3-settings" id="l3-settings-btn" title="設定・バックアップ">
+      <svg class="l3-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.16V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.16l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.27 14H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.16-2.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 10 3.27V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.16l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.73 10H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="l3-label">設定・バックアップ</span>
+    </button>
+    <div class="l3-settings-menu" id="l3-settings-menu" hidden>
+      <button type="button" data-l3-click="tsucho-toggle-settings" data-l3-tab="tsucho-tab-import">🔑 APIキー設定</button>
+      <button type="button" data-l3-click="btn-export-backup">💾 バックアップを書き出す</button>
+      <button type="button" data-l3-click="btn-import-backup">📂 バックアップから復元</button>
+      <button type="button" data-l3-click="tsucho-show-backup-history">☁️ 自動保存履歴</button>
+    </div>
+    <div class="l3-foot" id="l3-foot">読み込み中…</div>
+  </aside>
+  <div class="l3-scrim" id="l3-scrim"></div>
 
-<div class="app-body">
-  <nav class="app-sidebar" id="account-sidebar"></nav>
-  <main class="app-main">
-    <section id="view-tsucho" class="view"></section>
+  <main class="l3-main">
+    <header class="l3-main-head">
+      <button type="button" class="l3-icon-btn" id="l3-menu-btn" title="メニューの開閉"><svg class="l3-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <h1 id="l3-title">トップ</h1>
+      <span class="l3-head-note" id="l3-head-note"></span>
+    </header>
+    <div class="l3-main-body" id="l3-main-body">
+      <header class="app-header" hidden>
+        <div class="header-row">
+          <h1 class="app-title">通帳仕分け(freee取込用Excel作成)</h1>
+          <input type="file" id="backup-file-input" accept="application/json,.json" hidden>
+        </div>
+      </header>
+      <section id="view-tsucho" class="view"></section>
+    </div>
   </main>
+
+  <aside class="l3-right" aria-label="口座の一覧">
+    <div class="l3-right-head"><h2>口座</h2><span>押すとその口座の明細へ・次に取り込むファイルの口座になります</span></div>
+    <nav class="app-sidebar" id="account-sidebar"></nav>
+  </aside>
 </div>
 
 <!-- 資産状況レポート(PowerPoint出力)用。ビルド不要の構成を保つため、CDNのブラウザ版バンドルを読み込む -->

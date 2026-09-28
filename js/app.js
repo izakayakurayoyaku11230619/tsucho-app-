@@ -2,6 +2,7 @@ import { initTsucho } from './tsucho.js';
 import { exportBackup, importBackup } from './backup.js';
 import { initTsuchoStorage, flushPendingWrites } from './storage.js';
 import { requireLogin } from './firebaseClient.js';
+import { initLayout3 } from './layout3.js';
 
 // 起動が終わるまで、空っぽの画面が一瞬見えてしまうのを防ぐための軽い読み込み表示。
 const bootOverlay = document.createElement('div');
@@ -20,6 +21,7 @@ async function boot() {
   await initTsuchoStorage();
 
   const tsuchoApi = initTsucho(document.getElementById('view-tsucho'), document.getElementById('account-sidebar'));
+  initLayout3();
 
   document.getElementById('btn-export-backup').addEventListener('click', () => {
     exportBackup();
