@@ -15,7 +15,7 @@
 <meta name="theme-color" content="#1E3A8A">
 </head>
 <body>
-<!-- 全アプリ共通の3列: 左=メニュー / 中央=作業画面 / 右=口座の一覧(ここがスクロールする) -->
+<!-- 全アプリ共通のデザイン: 左=メニューと口座の一覧 / 中央=作業画面 -->
 <div class="l3-layout" id="l3-layout">
   <aside class="l3-sidebar" aria-label="メニュー">
     <div class="l3-brand">
@@ -23,6 +23,11 @@
       <div class="l3-brand-name">通帳仕分け<small>freee取込用Excel作成</small></div>
     </div>
     <nav class="l3-nav" id="l3-nav"></nav>
+    <!-- 口座の一覧(本人の希望で、メニューの下の空いているところに置く。長くなるとここだけスクロール) -->
+    <div class="l3-accounts">
+      <div class="l3-accounts-head">口座<span>押すとその口座の明細へ</span></div>
+      <nav class="app-sidebar" id="account-sidebar"></nav>
+    </div>
     <button type="button" class="l3-settings" id="l3-settings-btn" title="設定・バックアップ">
       <svg class="l3-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.16V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.16l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3.27 14H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.16-2.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 10 3.27V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.16l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.73 10H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       <span class="l3-label">設定・バックアップ</span>
@@ -54,10 +59,6 @@
     </div>
   </main>
 
-  <aside class="l3-right" aria-label="口座の一覧">
-    <div class="l3-right-head"><h2>口座</h2><span>押すとその口座の明細へ・次に取り込むファイルの口座になります</span></div>
-    <nav class="app-sidebar" id="account-sidebar"></nav>
-  </aside>
 </div>
 
 <!-- 資産状況レポート(PowerPoint出力)用。ビルド不要の構成を保つため、CDNのブラウザ版バンドルを読み込む -->
