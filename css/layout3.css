@@ -11,8 +11,8 @@
 html, body { height: 100%; }
 body { overflow: hidden; }
 
-.l3-layout { display: grid; grid-template-columns: 272px minmax(0,1fr); height: 100vh; height: 100dvh; }
-.l3-layout.collapsed { grid-template-columns: 64px minmax(0,1fr); }
+.l3-layout { display: grid; grid-template-columns: 272px minmax(0,1fr) 320px; height: 100vh; height: 100dvh; }
+.l3-layout.collapsed { grid-template-columns: 64px minmax(0,1fr) 320px; }
 .l3-ico { width: 21px; height: 21px; flex: none; }
 
 /* ---------- 左メニュー ---------- */
@@ -80,10 +80,19 @@ body { overflow: hidden; }
 .collapsed .l3-accounts { display: none; }
 /* ブラウザに古いindex.html(口座一覧の場所が無い版)が残っていても、メニューの下が空かないようにする */
 .l3-sidebar:not(:has(.l3-accounts)) .l3-nav { flex: 1; }
+.l3-layout:not(:has(#l3-summary)) { grid-template-columns: 272px minmax(0,1fr); }
+/* ---------- 右の列: 合計のカードを縦に並べる ---------- */
+.l3-right { overflow-y: auto; background: var(--color-bg); padding: 16px 14px 24px; border-left: 1px solid var(--color-border); }
+.l3-right-head { font-size: 13px; font-weight: 700; color: var(--color-text-muted); margin: 0 2px 10px; }
+.l3-right .summary-grid { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+.l3-right .summary-card { margin: 0; }
+.l3-right .summary-card-value { font-size: 24px; }
+.l3-right .summary-card.active { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .l3-scrim { display: none; }
 
 @media (max-width: 1150px) {
-  .l3-layout { grid-template-columns: 240px minmax(0,1fr); }
+  .l3-layout { grid-template-columns: 240px minmax(0,1fr) 270px; }
+  .l3-layout.collapsed { grid-template-columns: 64px minmax(0,1fr) 270px; }
 }
 /* スマホ幅: 左はドロワー、中央→右の順に縦に並べてページごとスクロール */
 @media (max-width: 767px) {
@@ -97,4 +106,5 @@ body { overflow: hidden; }
   .l3-main-head { position: sticky; top: 0; z-index: 10; height: 56px; }
   .l3-main-body { overflow: visible; padding: 14px 12px; }
   .collapsed .l3-accounts { display: block; }
+  .l3-right { border-left: 0; padding: 0 12px 24px; }
 }

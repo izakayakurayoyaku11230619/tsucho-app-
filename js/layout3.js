@@ -41,8 +41,7 @@ export function initLayout3() {
     box.innerHTML = '<div class="l3-accounts-head">口座<span>押すとその口座の明細へ</span></div>';
     nav.after(box);
     if (list) box.appendChild(list);
-    document.querySelector('.l3-right')?.remove();
-    layout.style.gridTemplateColumns = '';
+    document.querySelector('.l3-right:not(#l3-summary)')?.remove();
   }
   let lastKey = 'top';
 
@@ -132,6 +131,30 @@ export function initLayout3() {
   };
   updateFoot();
   setInterval(updateFoot, 5000);
+
+  // 右の列: トップの上段にある合計のカードを、描き直されるたびに右の列へ移す。
+  // (カードを押したときの動きは tsucho.js がカードに付けたものがそのまま使える)
+  let right = document.getElementById('l3-summary');
+  if (!right) {
+    right = document.createElement('aside');
+    right.className = 'l3-right';
+    right.id = 'l3-summary';
+    layout.appendChild(right);
+  }
+  const dash = document.getElementById('tsucho-top-dashboard');
+  const moveSummary = () => {
+    const grid = dash && dash.querySelector('.summary-grid');
+    if (!grid) return;
+    right.innerHTML = '<div class="l3-right-head">合計（押すと真ん中に内訳）</div>';
+    right.appendChild(grid);
+  };
+  if (dash) new MutationObserver(moveSummary).observe(dash, { childList: true });
+  moveSummary();
+  // 別の画面を開いているときにカードを押したら、トップに切り替えて内訳を見せる
+  right.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-toggle-section]')) return;
+    if (views.top && views.top.classList.contains('hidden')) { lastKey = 'top'; click('tsucho-tab-top'); }
+  }, true);
 
   syncActive();
 }

@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>通帳仕分け(freee取込用Excel作成)</title>
-<link rel="stylesheet" href="css/style.css?v=20260929c">
-<link rel="stylesheet" href="css/layout3.css?v=20260929c">
+<link rel="stylesheet" href="css/style.css?v=20260929d">
+<link rel="stylesheet" href="css/layout3.css?v=20260929d">
 <link rel="icon" href="icon-512.png">
 <link rel="apple-touch-icon" href="icon-512.png">
 <link rel="manifest" href="manifest.json">
@@ -15,7 +15,7 @@
 <meta name="theme-color" content="#1E3A8A">
 </head>
 <body>
-<!-- 全アプリ共通のデザイン: 左=メニューと口座の一覧 / 中央=作業画面 -->
+<!-- 全アプリ共通のデザイン: 左=メニューと口座の一覧 / 中央=作業画面 / 右=合計のカード -->
 <div class="l3-layout" id="l3-layout">
   <aside class="l3-sidebar" aria-label="メニュー">
     <div class="l3-brand">
@@ -58,6 +58,9 @@
       <section id="view-tsucho" class="view"></section>
     </div>
   </main>
+
+  <!-- 右の列: 合計のカード(トップの上段にあったもの)を縦に並べる -->
+  <aside class="l3-right" id="l3-summary" aria-label="合計"></aside>
 
 </div>
 
