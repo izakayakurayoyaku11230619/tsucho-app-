@@ -371,6 +371,11 @@ select, input { font-family: inherit; }
   .bank-summary-layout { grid-template-columns: 1fr; }
 }
 .bank-summary-list { display: flex; flex-direction: column; gap: 6px; max-height: 75vh; overflow-y: auto; }
+/* 明細一覧(#tsucho-bank-table)は件数が多いと非常に長くなり、ページ全体をスクロールしないと下まで
+   見えなかった。左の口座リスト(.bank-summary-list)と同じ考え方で、この部分だけを独立してスクロール
+   できるようにし、スクロールバーも(この部分に)見えるようにする。
+   (見出し行の固定=position:stickyも試したが、.data-tableがdisplay:blockのため効かなかった) */
+#tsucho-bank-table { max-height: 65vh; overflow-y: auto; }
 .bank-list-row { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--color-border); cursor: pointer; background: var(--color-surface); }
 .bank-list-row:hover { border-color: var(--color-primary); }
 .bank-list-row.active { border-color: var(--color-primary); background: #eef4ff; }
