@@ -1835,20 +1835,20 @@ export function initTsucho(root, sidebarRoot) {
     });
 
     bankTableEl.innerHTML = rows.length
-      ? `<table class="data-table">
+      ? `<table class="data-table data-table-compact">
           <thead><tr><th>発生日</th><th>区分</th><th>勘定科目</th><th>取引先(摘要)</th><th>備考</th><th>税区分</th><th>出金</th><th>入金</th><th>残高</th><th>取込元ファイル</th><th>状態</th></tr></thead>
           <tbody>${rows.map((r) => `
             <tr>
-              <td>${r.date}</td>
-              <td>${r.direction}</td>
-              <td>${escapeHtml(r.accountLabel)}</td>
-              <td>${escapeHtml(r.counterparty) || '<span class="empty-hint">(摘要なし)</span>'}</td>
-              <td>${escapeHtml(r.memo)}</td>
-              <td>${escapeHtml(r.taxCategory)}</td>
-              <td>${r.direction === '出金' ? currency(r.amount) : ''}</td>
-              <td>${r.direction === '入金' ? currency(r.amount) : ''}</td>
-              <td style="color:var(--color-text-muted)">${r.balance ? currency(r.balance) : ''}</td>
-              <td style="color:var(--color-text-muted);white-space:nowrap">${escapeHtml(r.sourceFileName)}</td>
+              <td style="white-space:nowrap">${r.date}</td>
+              <td style="white-space:nowrap">${r.direction}</td>
+              <td class="col-wrap">${escapeHtml(r.accountLabel)}</td>
+              <td class="col-wrap">${escapeHtml(r.counterparty) || '<span class="empty-hint">(摘要なし)</span>'}</td>
+              <td class="col-wrap">${escapeHtml(r.memo)}</td>
+              <td style="white-space:nowrap">${escapeHtml(r.taxCategory)}</td>
+              <td style="white-space:nowrap">${r.direction === '出金' ? currency(r.amount) : ''}</td>
+              <td style="white-space:nowrap">${r.direction === '入金' ? currency(r.amount) : ''}</td>
+              <td style="color:var(--color-text-muted);white-space:nowrap">${r.balance ? currency(r.balance) : ''}</td>
+              <td class="col-wrap" style="color:var(--color-text-muted)">${escapeHtml(r.sourceFileName)}</td>
               <td>${r.draft ? '<span class="badge badge-status status-unprocessed">未保存</span>' : '<span class="badge badge-status status-matched">保存済み</span>'}</td>
             </tr>`).join('')}</tbody>
         </table>`
