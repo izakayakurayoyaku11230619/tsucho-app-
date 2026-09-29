@@ -425,7 +425,7 @@ export function initTsucho(root, sidebarRoot) {
       <div id="tsucho-file-history-result"></div>
     </div>
 
-    <div class="panel" style="margin-top:16px">
+    <div class="panel" style="margin-top:16px" id="tsucho-list-panel">
       <div class="panel-header">
         <h2>📚 明細一覧</h2>
         <div style="display:flex;gap:6px">
@@ -1220,6 +1220,11 @@ export function initTsucho(root, sidebarRoot) {
         state.selectedAccount = name;
         renderBankPanel();
         setTsuchoTab('list');
+        // 「明細一覧」パネルまで自動でジャンプする(押しても表示が動かず、下まで見えないという報告があった)。
+        // タブ切り替え直後だとレイアウトが確定していないことがあるため、1フレーム待ってからスクロールする。
+        requestAnimationFrame(() => {
+          root.querySelector('#tsucho-list-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
       });
     });
 
