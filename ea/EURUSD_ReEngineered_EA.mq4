@@ -17,7 +17,7 @@ input int      Slippage              = 3;           // 許容スリッページ(
 
 //--- グリッド・ナンピン設定
 input string   Grid_Settings         = "--- グリッド設定 ---";
-input int      MaxPositions          = 2;           // 最大ポジション数（ナンピン上限） ※実績分析で2段目以降の損失が大きかったため3→2に縮小
+input int      MaxPositions          = 3;           // 最大ポジション数（ナンピン上限）
 input double   LotMultiplier         = 1.4;         // ロット増加倍率
 input int      ATR_Period            = 14;          // ATR計算期間
 input double   ATR_Grid_Multiplier   = 1.5;         // ATRステップ倍率
@@ -130,6 +130,7 @@ bool IsHourBlocked(int currentHour)
    int count = StringSplit(GetBlockedHoursForSymbol(), ',', hours);
    for(int i = 0; i < count; i++)
    {
+      if(StringLen(hours[i]) == 0) continue; // 空文字列はStrToInteger()が0を返し0時を誤ブロックするため除外
       if(StrToInteger(hours[i]) == currentHour) return true;
    }
    return false;
