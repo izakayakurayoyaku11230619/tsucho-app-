@@ -4,7 +4,7 @@
 //+------------------------------------------------------------------+
 #property copyright "Custom Engineering"
 #property link      ""
-#property version   "1.00"
+#property version   "1.10"
 #property strict
 
 //--- 基本設定
@@ -17,7 +17,7 @@ input int      Slippage              = 3;           // 許容スリッページ(
 
 //--- グリッド・ナンピン設定
 input string   Grid_Settings         = "--- グリッド設定 ---";
-input int      MaxPositions          = 3;           // 最大ポジション数（ナンピン上限）
+input int      MaxPositions          = 2;           // 最大ポジション数（ナンピン上限） ※実績分析で2段目以降の損失が大きかったため3→2に縮小
 input double   LotMultiplier         = 1.4;         // ロット増加倍率
 input int      ATR_Period            = 14;          // ATR計算期間
 input double   ATR_Grid_Multiplier   = 1.5;         // ATRステップ倍率
@@ -29,13 +29,18 @@ input double   SingleTradeTP_Pips    = 15.0;        // 単発時利確幅(pips)
 input double   TrailingStart_Pips    = 12.0;        // トレーリング開始(pips)
 input double   TrailingStep_Pips     = 5.0;         // トレーリング幅(pips)
 input double   BasketProfitTargetUSD = 15.0;        // バスケット目標利益額($)
-input int      MaxHoldHours          = 48;          // タイムストップ（最大保有時間・時間単位）
-input double   MaxDrawdownPercent    = 5.0;         // 最大許容ドローダウン（口座残高の%）
+input int      MaxHoldHours          = 48;          // タイムストップ（含み損なしでの最終決済・時間単位）
+input int      ForceCutHours         = 24;          // 含み損のまま経過したら強制損切り（実績で24h超保有が主な損失源だったため）
+input double   BasketMaxLossUSD      = 50.0;        // バスケット単位の絶対損切りライン($)
+input double   MaxDrawdownPercent    = 5.0;         // このシンボルの含み損に対する最大許容ドローダウン（口座残高の%）
+input double   HardStopLossPips      = 150.0;       // 発注時に同時設定する緊急ストップ(pips)。0で無効
 
-//--- タイムフィルター（取引除外時間：サーバー時間）
+//--- タイムフィルター（取引除外時間：サーバー時間、実績分析により通貨ペア別に分離）
 input string   Time_Settings         = "--- タイムフィルター ---";
 input bool     UseTimeFilter         = true;
-input string   BlockedHours          = "5,8,19,20,23"; // 赤字時間帯（カンマ区切り）
+input string   BlockedHours_EURUSD   = "9,20,23";       // EURUSDの赤字時間帯
+input string   BlockedHours_GBPUSD   = "0,1,2,5,8,19";  // GBPUSDの赤字時間帯（20時はGBPUSDでは好成績のため除外）
+input string   BlockedHours_Default  = "5,8,19,20,23";  // それ以外の通貨ペア用のフォールバック
 
 //+------------------------------------------------------------------+
 //| 内部グローバル変数                                               |
@@ -65,10 +70,10 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
-   // 1. 口座全体の最大許容損失（緊急安全停止）の確認
+   // 1. このシンボルの最大許容損失（緊急安全停止）の確認
    CheckMaxDrawdownProtection();
 
-   // 2. 既存ポジションの決済チェック（バスケットTP・タイムストップ・トレーリング）
+   // 2. 既存ポジションの決済チェック（バスケットTP・タイムストップ・強制損切り・トレーリング）
    ManageOpenPositions();
 
    // 3. タイムフィルター判定
@@ -79,6 +84,22 @@ void OnTick()
 }
 
 //+------------------------------------------------------------------+
+//| ロット正規化（最小/最大/刻み幅に丸める）                         |
+//+------------------------------------------------------------------+
+double NormalizeLot(double lot)
+{
+   double minLot = MarketInfo(Symbol(), MODE_MINLOT);
+   double maxLot = MarketInfo(Symbol(), MODE_MAXLOT);
+   double lotStep = MarketInfo(Symbol(), MODE_LOTSTEP);
+
+   lot = MathFloor(lot / lotStep) * lotStep;
+   if(lot < minLot) lot = minLot;
+   if(lot > maxLot) lot = maxLot;
+
+   return lot;
+}
+
+//+------------------------------------------------------------------+
 //| ロット計算（複利 or 固定）                                       |
 //+------------------------------------------------------------------+
 double CalculateBaseLot()
@@ -86,15 +107,18 @@ double CalculateBaseLot()
    if(!UseCompoundLot) return FixedLotSize;
 
    double calculated = (AccountBalance() / BalancePer001Lot) * 0.01;
-   double minLot = MarketInfo(Symbol(), MODE_MINLOT);
-   double maxLot = MarketInfo(Symbol(), MODE_MAXLOT);
-   double lotStep = MarketInfo(Symbol(), MODE_LOTSTEP);
+   return NormalizeLot(calculated);
+}
 
-   calculated = MathFloor(calculated / lotStep) * lotStep;
-   if(calculated < minLot) calculated = minLot;
-   if(calculated > maxLot) calculated = maxLot;
-
-   return calculated;
+//+------------------------------------------------------------------+
+//| 通貨ペアに応じた赤字時間帯リストの取得                           |
+//+------------------------------------------------------------------+
+string GetBlockedHoursForSymbol()
+{
+   string sym = Symbol();
+   if(StringFind(sym, "EURUSD") >= 0) return BlockedHours_EURUSD;
+   if(StringFind(sym, "GBPUSD") >= 0) return BlockedHours_GBPUSD;
+   return BlockedHours_Default;
 }
 
 //+------------------------------------------------------------------+
@@ -103,7 +127,7 @@ double CalculateBaseLot()
 bool IsHourBlocked(int currentHour)
 {
    string hours[];
-   int count = StringSplit(BlockedHours, ',', hours);
+   int count = StringSplit(GetBlockedHoursForSymbol(), ',', hours);
    for(int i = 0; i < count; i++)
    {
       if(StrToInteger(hours[i]) == currentHour) return true;
@@ -152,7 +176,7 @@ void CheckEntrySignals()
       {
          if((lastBuyPrice - Ask) >= stepPips * g_pipPoint)
          {
-            double nextLot = NormalizeDouble(CalculateBaseLot() * MathPow(LotMultiplier, buyCount), 2);
+            double nextLot = NormalizeLot(CalculateBaseLot() * MathPow(LotMultiplier, buyCount));
             OpenOrder(OP_BUY, nextLot);
          }
       }
@@ -161,7 +185,7 @@ void CheckEntrySignals()
       {
          if((Bid - lastSellPrice) >= stepPips * g_pipPoint)
          {
-            double nextLot = NormalizeDouble(CalculateBaseLot() * MathPow(LotMultiplier, sellCount), 2);
+            double nextLot = NormalizeLot(CalculateBaseLot() * MathPow(LotMultiplier, sellCount));
             OpenOrder(OP_SELL, nextLot);
          }
       }
@@ -174,11 +198,39 @@ void CheckEntrySignals()
 void OpenOrder(int cmd, double lot)
 {
    double price = (cmd == OP_BUY) ? Ask : Bid;
-   int ticket = OrderSend(Symbol(), cmd, lot, price, Slippage, 0, 0, "ReEngineered_EA", MagicNumber, 0, (cmd == OP_BUY) ? clrBlue : clrRed);
+
+   // 端末切断や週末ギャップ等に備えたサーバー側の緊急ストップ（通常のグリッド運用には影響しない広めの値）
+   double sl = 0;
+   if(HardStopLossPips > 0)
+   {
+      sl = (cmd == OP_BUY) ? price - HardStopLossPips * g_pipPoint
+                           : price + HardStopLossPips * g_pipPoint;
+   }
+
+   int ticket = OrderSend(Symbol(), cmd, lot, price, Slippage, sl, 0, "ReEngineered_EA", MagicNumber, 0, (cmd == OP_BUY) ? clrBlue : clrRed);
    if(ticket < 0)
    {
       Print("OrderSend Failed. Error: ", GetLastError());
    }
+}
+
+//+------------------------------------------------------------------+
+//| このシンボル/マジックナンバーの合計含み損益                     |
+//+------------------------------------------------------------------+
+double GetSymbolFloatingPL()
+{
+   double total = 0;
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
+      {
+         if(OrderSymbol() == Symbol() && OrderMagicNumber() == MagicNumber)
+         {
+            total += (OrderProfit() + OrderCommission() + OrderSwap());
+         }
+      }
+   }
+   return total;
 }
 
 //+------------------------------------------------------------------+
@@ -194,25 +246,12 @@ void ManageOpenPositions()
    int totalPos = buyCount + sellCount;
    if(totalPos == 0) return;
 
-   // 保有時間の確認（タイムストップ判定）
-   bool isTimeout = false;
-   if(oldestTime > 0 && (TimeCurrent() - oldestTime) >= (MaxHoldHours * 3600))
-   {
-      isTimeout = true;
-   }
+   // 保有時間の確認（タイムストップ・強制損切り判定）
+   double holdHours = (oldestTime > 0) ? (TimeCurrent() - oldestTime) / 3600.0 : 0;
+   bool isTimeout = (holdHours >= MaxHoldHours);
+   bool isForceCut = (holdHours >= ForceCutHours);
 
-   // 合計含み損益の算出
-   double totalBasketProfit = 0;
-   for(int i = OrdersTotal() - 1; i >= 0; i--)
-   {
-      if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
-      {
-         if(OrderSymbol() == Symbol() && OrderMagicNumber() == MagicNumber)
-         {
-            totalBasketProfit += (OrderProfit() + OrderCommission() + OrderSwap());
-         }
-      }
-   }
+   double totalBasketProfit = GetSymbolFloatingPL();
 
    // 複数ポジション時のバスケット利確、またはタイムストップ（微損・微益で即脱出）
    if(totalPos > 1)
@@ -222,10 +261,25 @@ void ManageOpenPositions()
          CloseAllPositions();
          return;
       }
+      // 含み損のまま長時間放置しない（実績データで24h超保有が主な損失源だったための強制損切り）
+      if(isForceCut && totalBasketProfit < 0)
+      {
+         Print("Force-cut (basket): ", Symbol(), " held ", holdHours, "h while ", totalBasketProfit);
+         CloseAllPositions();
+         return;
+      }
    }
    // 単一ポジション時のトレーリングストップ / TP処理
    else if(totalPos == 1)
    {
+      // 単発ポジションも同様に、含み損のまま長時間放置しない
+      if(isForceCut && totalBasketProfit < 0)
+      {
+         Print("Force-cut (single): ", Symbol(), " held ", holdHours, "h while ", totalBasketProfit);
+         CloseAllPositions();
+         return;
+      }
+
       for(int i = OrdersTotal() - 1; i >= 0; i--)
       {
          if(OrderSelect(i, SELECT_BY_POS, MODE_TRADES))
@@ -275,18 +329,23 @@ void ManageOpenPositions()
 }
 
 //+------------------------------------------------------------------+
-//| ドローダウン保護機能（口座保護）                                 |
+//| ドローダウン保護機能（シンボル単位の口座保護）                   |
 //+------------------------------------------------------------------+
 void CheckMaxDrawdownProtection()
 {
    double balance = AccountBalance();
-   double equity = AccountEquity();
    if(balance <= 0) return;
 
-   double drawdown = (balance - equity) / balance * 100.0;
-   if(drawdown >= MaxDrawdownPercent)
+   // 口座全体のエクイティではなく、このシンボルの含み損益のみで判定する。
+   // （同一口座で他通貨ペアも運用している場合、他ペアの含み損に巻き込まれて
+   //   健全なポジションまで閉じてしまうのを防ぐため）
+   double symbolFloatingPL = GetSymbolFloatingPL();
+   if(symbolFloatingPL >= 0) return;
+
+   double drawdownPercent = (-symbolFloatingPL) / balance * 100.0;
+   if(drawdownPercent >= MaxDrawdownPercent || (-symbolFloatingPL) >= BasketMaxLossUSD)
    {
-      Print("Max Drawdown Breached! Forcing Close All.");
+      Print("Max Drawdown Breached (", Symbol(), "): floatingPL=", symbolFloatingPL, " Forcing Close All.");
       CloseAllPositions();
    }
 }
