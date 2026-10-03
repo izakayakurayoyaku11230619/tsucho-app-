@@ -105,6 +105,18 @@ async function persistRecordsNow() {
   }
   await commitInChunks(ops);
   persistedIds = currentIds;
+  await bumpSyncMarker();
+}
+
+// receipt-app(取り込む側)に「通帳の明細が変わった」と知らせる目印(1件だけの小さな記録)。
+// receipt-appはこの1件だけを数分おきに読み、前回と変わっていたときにだけ全件を取り込む
+// (全件を何度も読み直すとFirestore無料枠の読み取り上限を使い切ってしまうため)。失敗しても保存自体は成功扱い。
+async function bumpSyncMarker() {
+  try {
+    await setDoc(doc(db, 'sync_markers', 'tsucho'), { updatedAt: Date.now() });
+  } catch (e) {
+    console.warn('tsucho-app: 同期の目印の更新に失敗しました(明細の保存自体は完了しています)', e);
+  }
 }
 
 export function saveTsuchoRecords(records) {
