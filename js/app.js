@@ -1,8 +1,8 @@
-import { initTsucho } from './tsucho.js?v=20260929g';
+import { initTsucho } from './tsucho.js?v=20261008a';
 import { exportBackup, importBackup } from './backup.js';
 import { initTsuchoStorage, flushPendingWrites } from './storage.js';
 import { requireLogin } from './firebaseClient.js';
-import { initLayout3 } from './layout3.js?v=20260929g';
+import { initLayout3 } from './layout3.js?v=20261008a';
 
 // 起動が終わるまで、空っぽの画面が一瞬見えてしまうのを防ぐための軽い読み込み表示。
 const bootOverlay = document.createElement('div');

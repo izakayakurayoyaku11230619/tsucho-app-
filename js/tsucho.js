@@ -284,6 +284,55 @@ function checkBalanceContinuityAllAccounts() {
   return results;
 }
 
+/**
+ * 毎月の入出金の見落としを探す(純粋関数。テストしやすいよう画面から切り離してある)。
+ * 口座ごとに「通帳がどこまで取り込まれているか(最終日)」を見て、その日までに来ているはずの月だけを判定する。
+ *  ・相手の名前は数字・空白・記号を除いてまとめる(「ヤチン 9ガツ」と「ヤチン 10ガツ」を同じものにする)
+ *  ・判定する月の前4か月のうち3か月以上あれば「毎月のもの」
+ *  ・いつもの日(中央値)+5日を過ぎても無ければ「見当たらない」
+ * @returns {{account,label,direction,day,amount,lastDate,missing:string[]}[]}
+ */
+export function findRecurringMisses(records, knownAccounts) {
+  const loanAccts = new Set(knownAccounts.filter((a) => a.accountKind === '借入金').map((a) => a.name));
+  const LOANISH = /^(残高スタート|借入実行)|元金返済/;
+  const normName = (s) => String(s || '').normalize('NFKC').replace(/[0-9０-９]+(月|ガツ|ｶﾞﾂ)?分?/g, '').replace(/[\s　()（）\-ー・.,、。:：/]/g, '').trim();
+  const ymOfDate = (d) => d.slice(0, 7);
+  const addMonth = (ym, n) => { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  const median = (xs) => { const a = [...xs].sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
+  const lastByAcct = {};
+  for (const r of records) if (r.date && (!lastByAcct[r.bankAccountName] || r.date > lastByAcct[r.bankAccountName])) lastByAcct[r.bankAccountName] = r.date;
+  const groups = new Map();
+  for (const r of records) {
+    if (!r.date || loanAccts.has(r.bankAccountName) || LOANISH.test(String(r.counterparty || ''))) continue;
+    if (r.accountLabel === '口座振替') continue; // ATM・自分の口座どうしの移動は毎月とは限らない
+    const name = normName(r.counterparty);
+    if (name.length < 2) continue;
+    const key = JSON.stringify([r.bankAccountName, r.direction, name]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+  const out = [];
+  for (const rs of groups.values()) {
+    const acct = rs[0].bankAccountName;
+    const last = lastByAcct[acct];
+    const months = new Set(rs.map((r) => ymOfDate(r.date)));
+    const day = median(rs.map((r) => Number(r.date.slice(8, 10))));
+    const missing = [];
+    // 通帳の最終日から見て、もう来ているはずの直近2か月を判定する
+    for (const back of [0, 1]) {
+      const ym = addMonth(ymOfDate(last), -back);
+      const due = `${ym}-${String(Math.min(28, day + 5)).padStart(2, '0')}`;
+      if (due > last) continue; // まだ通帳がそこまで来ていない
+      const before = [1, 2, 3, 4].map((n) => addMonth(ym, -n)).filter((m) => months.has(m)).length;
+      if (before >= 3 && !months.has(ym)) missing.push(ym);
+    }
+    if (!missing.length) continue;
+    const lastDate = rs.reduce((m, r) => (r.date > m ? r.date : m), '');
+    out.push({ account: acct, label: rs[rs.length - 1].counterparty, direction: rs[0].direction, day, amount: median(rs.map((r) => Number(r.amount) || 0)), lastDate, missing: missing.sort() });
+  }
+  return out.sort((a, b) => a.account.localeCompare(b.account) || a.day - b.day);
+}
+
 export function initTsucho(root, sidebarRoot) {
   const state = {
     files: [], // { id, fileName, bankAccountName, status: 'pending'|'done'|'error', rows: [], saved: boolean, errorMessage }
@@ -322,6 +371,7 @@ export function initTsucho(root, sidebarRoot) {
       <button type="button" class="btn btn-secondary" id="tsucho-tab-list">📚 明細一覧</button>
       <button type="button" class="btn btn-secondary" id="tsucho-check-duplicates">🔍 現在重複しているかチェック</button>
       <button type="button" class="btn btn-secondary" id="tsucho-check-balance-top">🔍 残高チェック</button>
+      <button type="button" class="btn btn-secondary" id="tsucho-check-recurring" title="毎月決まって入る・出るお金(家賃・返済・引き落とし)が、ある月だけ見当たらないものを探します">🔍 毎月の入出金の見落とし</button>
       <button type="button" class="btn btn-secondary" id="tsucho-show-file-history">📁 取込ファイル一覧</button>
       <button type="button" class="btn btn-secondary" id="tsucho-show-account-manage-top">✏️ 口座名を変更</button>
       <button type="button" class="btn btn-secondary" id="btn-export-backup" title="全データをJSONで書き出し">💾 バックアップ</button>
@@ -401,6 +451,14 @@ export function initTsucho(root, sidebarRoot) {
         <h2>🔍 重複チェック結果</h2>
       </div>
       <div id="tsucho-duplicate-check-result"></div>
+    </div>
+
+    <div class="panel hidden" id="tsucho-recurring-check-panel">
+      <div class="panel-header">
+        <h2>🔍 毎月の入出金の見落としチェック</h2>
+      </div>
+      <p class="empty-hint" style="padding-top:0">直近4か月のうち3か月以上、同じ口座・同じ相手で入金(出金)があったものを「毎月のもの」とみなし、それが見当たらない月を出します。家賃の入金漏れ・引き落とし不能(残高不足)・通帳の取り込み忘れの発見に使えます。借入の返済予定表の口座は見ません。</p>
+      <div id="tsucho-recurring-check-result"></div>
     </div>
 
     <div class="panel hidden" id="tsucho-balance-check-panel">
@@ -857,6 +915,36 @@ export function initTsucho(root, sidebarRoot) {
     duplicateCheckPanel.classList.remove('hidden');
     renderDuplicateCheck();
     duplicateCheckPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // --- 毎月の入出金の見落とし(家賃・返済・引き落としなど、毎月あるはずのものが無い月を探す) ---
+  const recurringCheckPanel = root.querySelector('#tsucho-recurring-check-panel');
+  const recurringCheckResultEl = root.querySelector('#tsucho-recurring-check-result');
+
+  function renderRecurringCheck() {
+    const misses = findRecurringMisses(getTsuchoRecords(), getKnownAccounts());
+    recurringCheckResultEl.innerHTML = misses.length
+      ? `<table class="data-table">
+          <thead><tr><th>口座</th><th>相手(摘要)</th><th>入出金</th><th>いつもの日・金額</th><th>最後に見えた日</th><th>見当たらない月</th></tr></thead>
+          <tbody>${misses.map((m) => `
+            <tr>
+              <td>${escapeHtml(m.account)}</td>
+              <td><b>${escapeHtml(m.label)}</b></td>
+              <td>${m.direction}</td>
+              <td style="white-space:nowrap">毎月${m.day}日ごろ ${currency(m.amount)}</td>
+              <td style="white-space:nowrap">${m.lastDate}</td>
+              <td style="white-space:nowrap;color:var(--color-danger, #c62828);font-weight:700">${m.missing.map((ym) => `${Number(ym.slice(5))}月`).join('・')}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+        <p class="empty-hint">通帳がその月の終わりまで取り込まれている口座だけを見ています。取り込み途中の口座は、取り込むと正しく判定されます。</p>`
+      : '<p class="empty-hint">✅ 毎月の入出金で、見当たらない月はありませんでした。</p>';
+  }
+
+  root.querySelector('#tsucho-check-recurring').addEventListener('click', () => {
+    setTsuchoTab('list');
+    recurringCheckPanel.classList.remove('hidden');
+    renderRecurringCheck();
+    recurringCheckPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   // --- 残高チェック(口座ごとに、ファイルをまたいで全体をチェックする) ---
