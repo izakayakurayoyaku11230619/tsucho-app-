@@ -108,3 +108,17 @@ body { overflow: hidden; }
   .collapsed .l3-accounts { display: block; }
   .l3-right { border-left: 0; padding: 0 12px 24px; }
 }
+
+/* ===== 左メニュー: 矢印つきの太いスクロールバー(全アプリ共通) ===== */
+/* 窓が低くて下のボタンが隠れても、右端のバーでスクロールして届くようにする */
+@media (min-width: 901px) {
+  .l3-layout { grid-template-rows: minmax(0, 1fr); }
+  .l3-sidebar { min-height: 0; overflow-y: auto; overflow-x: hidden; }
+  .l3-sidebar::-webkit-scrollbar { width: 16px; }
+  .l3-sidebar::-webkit-scrollbar-track { background: #fcfcfc; }
+  .l3-sidebar::-webkit-scrollbar-thumb { background: #909090; border-radius: 8px; border: 3px solid #fcfcfc; min-height: 40px; }
+  .l3-sidebar::-webkit-scrollbar-thumb:hover { background: #6f6f6f; }
+  .l3-sidebar::-webkit-scrollbar-button:single-button { display: block; height: 16px; width: 16px; background-color: #fcfcfc; background-repeat: no-repeat; background-position: center; background-size: 10px 10px; }
+  .l3-sidebar::-webkit-scrollbar-button:single-button:vertical:decrement { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1 8 5 2l4 6z' fill='%23909090'/%3E%3C/svg%3E"); }
+  .l3-sidebar::-webkit-scrollbar-button:single-button:vertical:increment { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1 2 5 8l4-6z' fill='%23909090'/%3E%3C/svg%3E"); }
+}
