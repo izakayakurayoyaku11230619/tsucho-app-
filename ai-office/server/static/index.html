@@ -20,6 +20,12 @@
   button.go { padding: 12px 22px; border-radius: 8px; border: 0; background: #f0883e; color: #fff; font-size: 16px; font-weight: bold; }
   button.back { padding: 8px 14px; border-radius: 8px; border: 0; background: #c9a35a; color: #fff; }
   canvas { width: 100%; background: #fbf3dc; border-radius: 12px; display: block; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  #roster { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+  .card { background: #fff; border: 3px solid #e5c99a; border-radius: 16px; padding: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,.12); }
+  .card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; display: block; }
+  .card b { display: block; margin: 6px 0 4px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 10px; color: #fff; font-size: 13px; background: #aaa; }
+  .badge.Meeting { background: #4a90e2; } .badge.Working { background: #3aa655; }
   ul { padding-left: 20px; } #status { margin: 8px 0; }
   .hint { margin: 6px 0; font-size: 14px; }
 </style>
@@ -40,6 +46,7 @@
   <section id="office" class="hidden">
     <button class="back" id="back">← キャラ選択にもどる</button>
     <canvas id="c" width="900" height="500"></canvas>
+    <div id="roster"></div>
     <div id="status"></div>
     <ul id="tasks"></ul>
   </section>
@@ -107,7 +114,8 @@ function rr(x, y, w, h, r, fill, stroke) {
   if (fill) { ctx.fillStyle = fill; ctx.fill(); }
   if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
 }
-function circle(x, y, r, fill) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); }
+function circle(x, y, r, fill, stroke) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } }
+const OUT = "#6b4a2b";
 function emoji(t, x, y, size) { ctx.font = size + "px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#000"; ctx.fillText(t, x, y); }
 
 function drawBackground() {
@@ -165,20 +173,20 @@ function drawAgent(a, c, moving) {
   const step = moving ? Math.sin(tick / 3) * 4 : 0;
   rr(x - 9 + step, y + 20, 7, 10, 3, "#5a4636"); rr(x + 2 - step, y + 20, 7, 10, 3, "#5a4636");
   // 体
-  rr(x - 13, y + 2, 26, 22, 9, L.body);
+  rr(x - 13, y + 2, 26, 22, 9, L.body, OUT);
   if (a.id === "Editor") { ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1.5; for (let i = -8; i <= 8; i += 8) { ctx.beginPath(); ctx.moveTo(x + i, y + 4); ctx.lineTo(x + i, y + 22); ctx.stroke(); } for (let j = 8; j <= 20; j += 8) { ctx.beginPath(); ctx.moveTo(x - 12, y + j); ctx.lineTo(x + 12, y + j); ctx.stroke(); } }
   if (a.id === "Designer") { ["#e25a5a", "#f2a65a", "#7fc79a", "#6aa6e0"].forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(x - 12, y + 6 + i * 4, 24, 2.5); }); }
   if (a.id === "CEO") { rr(x - 5, y + 3, 10, 20, 3, "#f4efe6"); ctx.fillStyle = "#c0392b"; ctx.fillRect(x - 1.5, y + 5, 3, 10); }
   // 腕(作業中は上下に動く)
   const arm = working ? Math.sin(tick / 2 + (a.id.length)) * 3 : 0;
-  rr(x - 18, y + 8 + arm, 7, 14, 3, L.body); rr(x + 11, y + 8 - arm, 7, 14, 3, L.body);
+  rr(x - 18, y + 8 + arm, 7, 14, 3, L.body, OUT); rr(x + 11, y + 8 - arm, 7, 14, 3, L.body, OUT);
   // 後ろ髪
-  if (a.id === "Designer") rr(x - 18, y - 22, 36, 34, 14, L.hair);
+  if (a.id === "Designer") rr(x - 18, y - 22, 36, 34, 14, L.hair, OUT);
   if (a.id === "Secretary") circle(x, y - 38, 8, L.hair);
   // 顔
-  circle(x, y - 12, 17, "#ffe3c8");
+  circle(x, y - 12, 17, "#ffe3c8", OUT);
   // 髪
-  ctx.fillStyle = L.hair; ctx.beginPath(); ctx.arc(x, y - 14, 18, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = L.hair; ctx.beginPath(); ctx.arc(x, y - 14, 18, Math.PI, 0); ctx.fill(); ctx.strokeStyle = OUT; ctx.lineWidth = 2; ctx.stroke();
   if (a.id === "CEO") { circle(x - 16, y - 16, 4, L.hair); circle(x + 16, y - 16, 4, L.hair); }
   if (a.id === "Designer") { rr(x + 7, y - 28, 8, 4, 2, "#e8484d"); }
   if (a.id === "Editor") { ctx.strokeStyle = "#444"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y - 16, 19, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); rr(x - 22, y - 18, 7, 12, 3, "#444"); rr(x + 15, y - 18, 7, 12, 3, "#444"); }
@@ -232,10 +240,24 @@ function frame() {
   requestAnimationFrame(frame);
 }
 
+const NAMES = { CEO: "社長", Secretary: "秘書", Editor: "編集者", Designer: "デザイナー" };
+function renderRoster() {
+  const box = document.getElementById("roster");
+  box.replaceChildren(...agents.filter(a => team.has(a.id)).map(a => {
+    const card = document.createElement("div"); card.className = "card";
+    const img = document.createElement("img"); img.src = "portrait_" + a.id + ".jpg"; img.alt = NAMES[a.id];
+    const name = document.createElement("b"); name.textContent = a.name;
+    const badge = document.createElement("span"); badge.className = "badge " + a.state; badge.textContent = LABEL[a.state] || a.state;
+    card.append(img, name, badge);
+    return card;
+  }));
+}
+
 async function poll() {
   try {
     const res = await fetch("/state");
     agents = (await res.json()).agents;
+    renderRoster();
     const p = agents.find(a => a.project);
     document.getElementById("status").textContent =
       (p ? "プロジェクト: " + p.project + " / " : "") +
