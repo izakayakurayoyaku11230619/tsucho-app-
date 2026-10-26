@@ -17,7 +17,7 @@
   .pick.locked { background: #b08a2e; cursor: default; }
   form { display: flex; gap: 8px; margin: 12px 0; }
   input { flex: 1; padding: 12px; border-radius: 8px; border: 2px solid #e0b860; font-size: 16px; }
-  button.go { padding: 12px 22px; border-radius: 8px; border: 0; background: #f0883e; color: #fff; font-size: 16px; font-weight: bold; }
+  button.go, button.save { padding: 12px 22px; border-radius: 8px; border: 0; background: #f0883e; color: #fff; font-size: 16px; font-weight: bold; }
   button.back { padding: 8px 14px; border-radius: 8px; border: 0; background: #c9a35a; color: #fff; }
   canvas { width: 100%; background: #fbf3dc; border-radius: 12px; display: block; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
   #roster { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
@@ -39,6 +39,9 @@
   #log { background: #fff; border-radius: 12px; padding: 8px 12px; max-height: 180px; overflow: auto; font-size: 13px; }
   ul { padding-left: 20px; } #status { margin: 8px 0; }
   #extra { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .keybox { background: #fff; border: 3px solid #e5c99a; border-radius: 14px; padding: 10px 12px; margin: 12px 0; }
+  .keybox label { display: block; font-weight: bold; } .keybox .row { display: flex; gap: 8px; margin: 6px 0; } .keybox button { white-space: nowrap; padding: 8px 16px; } .keybox small { color: #8a6b45; }
+  .badge.ok { background: #3aa655; }
   .hint { margin: 6px 0; font-size: 14px; }
 </style>
 </head>
@@ -50,6 +53,12 @@
     </div>
     <p class="hint">8人の役割は全員参加します(外せません)。上の絵にいない4人は下のカードです。</p>
     <div id="extra"></div>
+    <form id="keyform" class="keybox">
+      <label>Anthropic の APIキー <span id="keystate" class="badge">未設定</span></label>
+      <div class="row"><input id="apikey" type="password" autocomplete="off" placeholder="sk-ant-..." minlength="10">
+      <button class="save" type="submit">保存</button><button class="back" type="button" id="keyclear">削除</button></div>
+      <small>キーはこのサーバーのメモリにだけ置きます(ファイルやログには書かず、画面にも戻しません)。サーバーを止めると消えます。他の人がつなげる場所には公開しないでください。</small>
+    </form>
     <form id="form">
       <input id="prompt" placeholder="社長への指示 例: ランディングページを作る" required maxlength="2000">
       <button class="go">開始</button>
@@ -69,6 +78,7 @@
       </div>
       <table class="dash"><thead><tr><th>役割</th><th>状態</th><th>いまやっていること</th></tr></thead><tbody id="dash-rows"></tbody></table>
       <h3>できごと</h3><div id="log"></div>
+      <h3>成果物(最新のプロジェクト)</h3><div id="outputs"></div>
       <h3>プロジェクト一覧</h3><table class="dash"><thead><tr><th>指示</th><th>状態</th><th>タスク</th></tr></thead><tbody id="proj-rows"></tbody></table>
     </div>
     <div id="view"><canvas id="c" width="960" height="630"></canvas>
@@ -365,6 +375,40 @@ function renderDashboard(projects) {
   }));
 }
 
+async function refreshKey() {
+  try {
+    const st = await (await fetch("/settings")).json();
+    const b = document.getElementById("keystate");
+    b.textContent = st.has_key ? "設定済み(" + (st.source === "app" ? "画面から" : "環境変数") + ")" : "未設定";
+    b.classList.toggle("ok", st.has_key);
+  } catch (e) {}
+}
+document.getElementById("keyform").addEventListener("submit", async e => {
+  e.preventDefault();
+  const input = document.getElementById("apikey");
+  const res = await fetch("/settings/api_key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: input.value }) });
+  input.value = "";
+  if (!res.ok) alert("キーの形式が正しくないようです");
+  refreshKey();
+});
+document.getElementById("keyclear").addEventListener("click", async () => { await fetch("/settings/api_key", { method: "DELETE" }); refreshKey(); });
+refreshKey();
+
+function renderOutputs(projects) {
+  const box = document.getElementById("outputs");
+  const p = projects[0];
+  if (!p) { box.textContent = "まだありません"; return; }
+  const ST = { working: "作成中…", done: "完了", no_key: "APIキー未設定", error: "失敗" };
+  box.replaceChildren(...Object.keys(ROLE_NAMES).filter(id => p.outputs[id]).map(id => {
+    const o = p.outputs[id];
+    const d = document.createElement("details"); d.open = false; d.className = "tile"; d.style.margin = "6px 0";
+    const sm = document.createElement("summary"); sm.textContent = ROLE_NAMES[id] + " — " + (ST[o.status] || o.status);
+    const pre = document.createElement("div"); pre.style.whiteSpace = "pre-wrap"; pre.style.marginTop = "6px"; pre.textContent = o.text;
+    d.append(sm, pre);
+    return d;
+  }));
+}
+
 async function poll() {
   try {
     const res = await fetch("/state");
@@ -378,6 +422,7 @@ async function poll() {
     }
     const projects = await (await fetch("/projects")).json();
     renderDashboard(projects);
+    if (!document.querySelector("#outputs details[open]")) renderOutputs(projects);
     const p = agents.find(a => a.project);
     document.getElementById("status").textContent =
       (p ? "プロジェクト: " + p.project + " / " : "") +

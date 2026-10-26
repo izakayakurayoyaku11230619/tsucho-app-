@@ -1,10 +1,13 @@
 import json
 import logging
 import os
+import threading
 import time
 import uuid
 from enum import Enum
 from pathlib import Path
+
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -65,18 +68,42 @@ SYSTEM_PROMPT = (
 )
 
 
+# 画面から入れたAPIキー。サーバーのメモリにだけ置き、ファイルやログには書かない。
+_api_key: str | None = None
+_pool = ThreadPoolExecutor(max_workers=4)
+
+ROLE_PROMPTS = {
+    "CEO": "社長AIとして、プロジェクトの方針と成功の基準を3行でまとめる",
+    "Secretary": "秘書AIとして、進行スケジュール(日程の目安)と必要な資料の一覧を作る",
+    "PM": "マネージャーAIとして、作業の順番・担当・リスクを短い表形式でまとめる",
+    "Designer": "デザイナーAIとして、コンセプトを2つ出し、それぞれ色・雰囲気・レイアウトを説明する",
+    "Illustrator": "イラストAIとして、必要なイラストの一覧と、それぞれの描き方の指示を書く",
+    "Editor": "編集者AIとして、キャッチコピー案を3つと、本文の構成案を書く",
+    "Programmer": "プログラマーAIとして、実装の方針と主なファイル構成を書く",
+    "DataScientist": "データ分析AIとして、見るべき指標と、効果の測り方を書く",
+}
+
+
+def get_client():
+    key = _api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return None
+    import anthropic
+
+    return anthropic.Anthropic(api_key=key)
+
+
 def fallback_tasks(prompt: str) -> list[str]:
     return [f"『{prompt}』の要件を整理する", "デザイン案を作る", "文章を整えてレビューする"]
 
 
 def decompose_task(prompt: str) -> list[str]:
-    """社長AIがタスクを分解する。ANTHROPIC_API_KEY がないか失敗したら固定のタスクを返す。"""
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return fallback_tasks(prompt)
+    """社長AIがタスクを分解する。APIキーがないか失敗したら固定のタスクを返す。"""
     try:
-        import anthropic
-
-        res = anthropic.Anthropic().messages.create(
+        client = get_client()
+        if client is None:
+            return fallback_tasks(prompt)
+        res = client.messages.create(
             model=MODEL,
             max_tokens=500,
             system=SYSTEM_PROMPT,
@@ -88,6 +115,27 @@ def decompose_task(prompt: str) -> list[str]:
     except Exception:
         logging.exception("タスク分解に失敗したので固定のタスクを使います")
     return fallback_tasks(prompt)
+
+
+def make_output(project: dict, role: str) -> None:
+    """各AIが実際の成果物を書く。結果は project["outputs"][role] に入る。"""
+    outputs = project["outputs"]
+    try:
+        client = get_client()
+        if client is None:
+            outputs[role] = {"status": "no_key", "text": "APIキーを設定すると、ここにこの役割の成果物が出ます。"}
+            return
+        outputs[role] = {"status": "working", "text": ""}
+        res = client.messages.create(
+            model=MODEL,
+            max_tokens=700,
+            system=f"あなたは小さな会社の社員AIです。{ROLE_PROMPTS[role]}。日本語で、簡潔に、見出しや箇条書きを使ってください。",
+            messages=[{"role": "user", "content": f"依頼: {project['prompt']}\nタスク: " + " / ".join(project["tasks"])}],
+        )
+        outputs[role] = {"status": "done", "text": res.content[0].text}
+    except Exception:
+        logging.exception("成果物の作成に失敗: %s", role)
+        outputs[role] = {"status": "error", "text": "成果物を作れませんでした。APIキーやモデル名を確かめてください。"}
 
 
 def state_in_project(agent: Agent, project: dict, now: float) -> State:
@@ -128,13 +176,41 @@ def start_project(req: StartRequest):
         "prompt": req.prompt,
         "members": members,
         "tasks": decompose_task(req.prompt),
+        "outputs": {},
         "started_at": time.time(),
     }
+    for role in members:
+        _pool.submit(make_output, projects[project_id], role)
     return {
         "project_id": project_id,
         "message": f"社長が『{req.prompt}』のプロジェクトを開始しました。",
         "tasks": projects[project_id]["tasks"],
     }
+
+
+class KeyRequest(BaseModel):
+    key: str = Field(min_length=10, max_length=300)
+
+
+@app.get("/settings")
+def get_settings():
+    """キー自体は返さない。設定済みかどうかだけ返す。"""
+    source = "app" if _api_key else "env" if os.environ.get("ANTHROPIC_API_KEY") else None
+    return {"has_key": source is not None, "source": source, "model": MODEL}
+
+
+@app.post("/settings/api_key")
+def set_api_key(req: KeyRequest):
+    global _api_key
+    _api_key = req.key.strip()
+    return {"has_key": True}
+
+
+@app.delete("/settings/api_key")
+def clear_api_key():
+    global _api_key
+    _api_key = None
+    return {"has_key": bool(os.environ.get("ANTHROPIC_API_KEY"))}
 
 
 @app.get("/projects")
@@ -146,6 +222,7 @@ def list_projects():
             "prompt": p["prompt"],
             "tasks": p["tasks"],
             "members": sorted(p["members"]),
+            "outputs": p["outputs"],
             "elapsed": round(now - p["started_at"], 1),
             "duration": PROJECT_SECONDS,
             "done": now - p["started_at"] >= PROJECT_SECONDS,

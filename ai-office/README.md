@@ -27,3 +27,9 @@ AI社員が会議室・デスクを歩き回る様子をUnityで表示するプ�
 3. Animatorに bool `IsWalking` / `IsTyping` / `IsTalking` を作る。
 4. 空のGameObjectに `AIApiClient` を付け、`characters` に全キャラを登録する。
 5. ボタンから `AIApiClient.StartProject("...")` を呼ぶ。
+
+## APIキー
+
+環境変数 `ANTHROPIC_API_KEY` か、選択画面の「APIキー」欄で設定する。画面から入れたキーはサーバーのメモリにだけ置き、ファイルにもログにも書かず、`GET /settings` も設定済みかどうかしか返さない(サーバーを止めると消える)。他の人がつなげるネットワークには公開しない。
+
+キーがあると、社長AIのタスク分解に加えて、各役割のAIが成果物を書き、ダッシュボードの「成果物」に出る。キーがなければ固定のタスクと案内文が出る。
