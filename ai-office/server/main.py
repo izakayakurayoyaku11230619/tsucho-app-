@@ -6,14 +6,13 @@ import uuid
 from enum import Enum
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="AI Office")
 
-MEETING_SECONDS = 5
-WORKING_SECONDS = 20
+PROJECT_SECONDS = 25
 
 
 class State(str, Enum):
@@ -22,40 +21,48 @@ class State(str, Enum):
     WORKING = "Working"
 
 
+M, W = State.MEETING, State.WORKING
+
+
 class StartRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
+    # 参加させる役割のid。社長(CEO)は常に参加する。
+    members: list[str] = Field(default_factory=lambda: ["CEO"])
 
 
 class Agent:
-    def __init__(self, id: str, name: str, role: str, work_delay: float = 0):
+    def __init__(self, id: str, name: str, role: str, timeline: list[tuple[float, float, State]]):
         self.id = id
         self.name = name
         self.role = role
-        # 会議のあと、この秒数だけ待ってから作業を始める(デザイン完了待ちなど)
-        self.work_delay = work_delay
+        # (開始秒, 終了秒, 状態)。どこにも当てはまらない間は Idle(自分の席で待機)。
+        self.timeline = timeline
 
 
+# 流れ: 全員で会議 → 社長が指示 → デザイナーと編集者が作業 → 会議室でレビュー
 AGENTS = [
-    Agent("CEO", "社長AI", "CEO"),
-    Agent("Designer", "デザイナーAI", "Designer"),
-    Agent("Engineer", "エンジニアAI", "Engineer", work_delay=8),
+    Agent("CEO", "社長AI", "CEO", [(0, 5, M), (5, 10, W), (20, 25, M)]),
+    Agent("Secretary", "秘書AI", "Secretary", [(0, 5, M), (5, 25, W)]),
+    Agent("Editor", "編集者AI", "Editor", [(0, 5, M), (10, 20, W), (20, 25, M)]),
+    Agent("Designer", "デザイナーAI", "Designer", [(0, 5, M), (10, 20, W), (20, 25, M)]),
 ]
+AGENT_IDS = {a.id for a in AGENTS}
 
-# project_id -> {"prompt", "tasks", "started_at"}
+# project_id -> {"prompt", "tasks", "members", "started_at"}
 projects: dict[str, dict] = {}
 
 
 MODEL = os.environ.get("AI_OFFICE_MODEL", "claude-sonnet-5-5")
 
 SYSTEM_PROMPT = (
-    "あなたは小さな会社の社長AIです。ユーザーの依頼を、デザイナーAIとエンジニアAIが"
+    "あなたは小さな会社の社長AIです。ユーザーの依頼を、秘書AI・デザイナーAI・編集者AIが"
     "進められる3〜5個のタスクに分解してください。"
     "出力は日本語の短い文字列のJSON配列のみ(前置きやコードブロックは不要)。"
 )
 
 
 def fallback_tasks(prompt: str) -> list[str]:
-    return [f"『{prompt}』の要件を整理する", "デザイン案を作る", "実装する"]
+    return [f"『{prompt}』の要件を整理する", "デザイン案を作る", "文章を整えてレビューする"]
 
 
 def decompose_task(prompt: str) -> list[str]:
@@ -80,21 +87,20 @@ def decompose_task(prompt: str) -> list[str]:
 
 
 def state_in_project(agent: Agent, project: dict, now: float) -> State:
+    if agent.id not in project["members"]:
+        return State.IDLE
     elapsed = now - project["started_at"]
-    if elapsed < MEETING_SECONDS:
-        return State.MEETING
-    work_start = MEETING_SECONDS + agent.work_delay
-    if work_start <= elapsed < work_start + WORKING_SECONDS:
-        return State.WORKING
+    for start, end, state in agent.timeline:
+        if start <= elapsed < end:
+            return state
     return State.IDLE
 
 
 def agent_state(agent: Agent, now: float) -> tuple[State, str | None]:
     """複数プロジェクトが重なったら、最後に始まった(動いている)ものを優先する。"""
     for pid, project in sorted(projects.items(), key=lambda kv: -kv[1]["started_at"]):
-        state = state_in_project(agent, project, now)
-        if state != State.IDLE or now - project["started_at"] < MEETING_SECONDS + agent.work_delay:
-            return state, pid
+        if agent.id in project["members"] and now - project["started_at"] < PROJECT_SECONDS:
+            return state_in_project(agent, project, now), pid
     return State.IDLE, None
 
 
@@ -108,9 +114,14 @@ def target_for(state: State) -> str:
 
 @app.post("/start_project")
 def start_project(req: StartRequest):
+    unknown = [m for m in req.members if m not in AGENT_IDS]
+    if unknown:
+        raise HTTPException(status_code=422, detail=f"unknown members: {unknown}")
+    members = {"CEO", *req.members}
     project_id = uuid.uuid4().hex[:8]
     projects[project_id] = {
         "prompt": req.prompt,
+        "members": members,
         "tasks": decompose_task(req.prompt),
         "started_at": time.time(),
     }

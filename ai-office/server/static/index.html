@@ -5,56 +5,96 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI Office</title>
 <style>
-  body { margin: 0; font-family: sans-serif; background: #1e2430; color: #eee; }
-  main { max-width: 760px; margin: 0 auto; padding: 16px; }
-  form { display: flex; gap: 8px; margin-bottom: 12px; }
-  input { flex: 1; padding: 10px; border-radius: 6px; border: 0; font-size: 16px; }
-  button { padding: 10px 16px; border-radius: 6px; border: 0; background: #4a90e2; color: #fff; font-size: 16px; }
-  canvas { width: 100%; background: #2b3344; border-radius: 8px; display: block; }
-  ul { padding-left: 20px; }
-  #status { color: #9ab; margin: 8px 0; }
+  body { margin: 0; font-family: sans-serif; background: #fff4c8; color: #4a3220; }
+  main { max-width: 960px; margin: 0 auto; padding: 12px; }
+  h1 { margin: 4px 0 10px; font-size: 20px; }
+  .hidden { display: none !important; }
+  #stage { position: relative; line-height: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  #stage img { width: 100%; display: block; }
+  .pick { position: absolute; transform: translate(-50%, -50%); line-height: 1; padding: 6px 14px; border-radius: 16px;
+          border: 3px solid #fff; background: #f0883e; color: #fff; font-weight: bold; font-size: clamp(11px, 2vw, 18px); cursor: pointer; white-space: nowrap; }
+  .pick.on { background: #3aa655; }
+  .pick.locked { background: #b08a2e; cursor: default; }
+  form { display: flex; gap: 8px; margin: 12px 0; }
+  input { flex: 1; padding: 12px; border-radius: 8px; border: 2px solid #e0b860; font-size: 16px; }
+  button.go { padding: 12px 22px; border-radius: 8px; border: 0; background: #f0883e; color: #fff; font-size: 16px; font-weight: bold; }
+  button.back { padding: 8px 14px; border-radius: 8px; border: 0; background: #c9a35a; color: #fff; }
+  canvas { width: 100%; background: #fbf3dc; border-radius: 12px; display: block; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  ul { padding-left: 20px; } #status { margin: 8px 0; }
+  .hint { margin: 6px 0; font-size: 14px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>AI Office</h1>
-  <form id="form">
-    <input id="prompt" placeholder="例: ランディングページを作る" required maxlength="2000">
-    <button>開始</button>
-  </form>
-  <canvas id="c" width="720" height="360"></canvas>
-  <div id="status"></div>
-  <ul id="tasks"></ul>
+  <section id="select">
+    <div id="stage">
+      <img src="select.jpg" alt="Select Your Character">
+    </div>
+    <p class="hint">社長は必ず参加します。秘書・編集者・デザイナーは SELECT で入れる/外すを切り替えられます(緑 = 参加)。</p>
+    <form id="form">
+      <input id="prompt" placeholder="社長への指示 例: ランディングページを作る" required maxlength="2000">
+      <button class="go">開始</button>
+    </form>
+  </section>
+
+  <section id="office" class="hidden">
+    <button class="back" id="back">← キャラ選択にもどる</button>
+    <canvas id="c" width="900" height="480"></canvas>
+    <div id="status"></div>
+    <ul id="tasks"></ul>
+  </section>
 </main>
 <script>
+// 選択画面のボタン位置は、背景画像(2000x1116)の中の割合
+const PICKS = [
+  { id: "CEO", label: "社長", x: 21.5, y: 21.9, locked: true },
+  { id: "Secretary", label: "秘書", x: 20.9, y: 59.9 },
+  { id: "Editor", label: "編集者", x: 57.0, y: 51.8 },
+  { id: "Designer", label: "デザイナー", x: 90.6, y: 66.9 },
+];
+const team = new Set(["CEO", "Secretary", "Editor", "Designer"]);
+
+const stage = document.getElementById("stage");
+for (const p of PICKS) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "pick on" + (p.locked ? " locked" : "");
+  b.style.left = p.x + "%"; b.style.top = p.y + "%";
+  const refresh = () => { b.textContent = (team.has(p.id) ? "✓ " : "") + p.label; b.classList.toggle("on", team.has(p.id)); };
+  b.addEventListener("click", () => {
+    if (p.locked) return;
+    team.has(p.id) ? team.delete(p.id) : team.add(p.id);
+    refresh();
+  });
+  refresh();
+  stage.appendChild(b);
+}
+
+// ---- オフィス画面 ----
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
-const ROOM = { x: 440, y: 40, w: 250, h: 280 };
-const DESKS = { CEO: { x: 120, y: 90 }, Designer: { x: 120, y: 190 }, Engineer: { x: 120, y: 290 } };
-const SEATS = { CEO: { x: 520, y: 140 }, Designer: { x: 610, y: 140 }, Engineer: { x: 565, y: 230 } };
-const COLORS = { CEO: "#e2b34a", Designer: "#e25a8a", Engineer: "#4ac28a" };
+const ROOMS = [
+  { name: "社長室", x: 20, y: 20, w: 250, h: 200, color: "#f4e1c1" },
+  { name: "秘書デスク", x: 20, y: 250, w: 250, h: 210, color: "#f8dcd8" },
+  { name: "編集室", x: 300, y: 250, w: 290, h: 210, color: "#cdeadf" },
+  { name: "デザイン室", x: 620, y: 250, w: 260, h: 210, color: "#dce8f7" },
+  { name: "会議室", x: 300, y: 20, w: 580, h: 200, color: "#d4e4f2" },
+];
+const DESKS = { CEO: { x: 50, y: 95 }, Secretary: { x: 50, y: 330 }, Editor: { x: 330, y: 330 }, Designer: { x: 650, y: 330 } };
+const SEAT_OFFSET = { x: 100, y: 5 };
+const MEETING_SEATS = { CEO: { x: 480, y: 115 }, Secretary: { x: 590, y: 70 }, Editor: { x: 700, y: 115 }, Designer: { x: 590, y: 170 } };
+const COLORS = { CEO: "#b9b9c4", Secretary: "#e07aa0", Editor: "#e2a24a", Designer: "#e25a8a" };
 const LABEL = { Idle: "待機中", Meeting: "会議中", Working: "作業中" };
 const chars = {};
 let agents = [];
 let tick = 0;
+let polling = null;
 
 function targetFor(a) {
-  if (a.target === "MeetingRoom") return SEATS[a.id] || { x: 565, y: 180 };
-  const d = DESKS[a.id] || { x: 120, y: 190 };
-  return { x: d.x + 70, y: d.y };
-}
-
-async function poll() {
-  try {
-    const res = await fetch("/state");
-    agents = (await res.json()).agents;
-    const p = agents.find(a => a.project);
-    document.getElementById("status").textContent =
-      (p ? "プロジェクト: " + p.project + " / " : "") + agents.map(a => `${a.name}:${LABEL[a.state] || a.state}`).join("  ");
-  } catch (e) {
-    document.getElementById("status").textContent = "サーバーに接続できません";
-  }
+  if (a.target === "MeetingRoom") return MEETING_SEATS[a.id];
+  const d = DESKS[a.id];
+  return { x: d.x + SEAT_OFFSET.x, y: d.y + SEAT_OFFSET.y };
 }
 
 function roundRect(x, y, w, h, r, fill) {
@@ -62,32 +102,31 @@ function roundRect(x, y, w, h, r, fill) {
 }
 
 function drawBackground() {
-  ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = "#2b3344"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#e8d3a2"; ctx.fillRect(0, 0, W, H);
   ctx.font = "13px sans-serif"; ctx.textAlign = "left";
-  roundRect(ROOM.x, ROOM.y, ROOM.w, ROOM.h, 12, "#394560");
-  roundRect(ROOM.x + 60, ROOM.y + 90, 130, 70, 35, "#5b4a3a");
-  ctx.fillStyle = "#cfd6e6"; ctx.fillText("会議室", ROOM.x + 12, ROOM.y + 22);
-  ctx.fillText("オフィス", 20, 22);
+  for (const r of ROOMS) {
+    roundRect(r.x, r.y, r.w, r.h, 14, r.color);
+    ctx.fillStyle = "#6b5236"; ctx.fillText(r.name, r.x + 12, r.y + 22);
+  }
+  roundRect(430, 85, 320, 70, 35, "#8a6a48");
   for (const id in DESKS) {
+    if (!team.has(id)) continue;
     const d = DESKS[id];
-    roundRect(d.x - 20, d.y - 22, 90, 44, 6, "#6a5a48");
-    roundRect(d.x + 8, d.y - 18, 34, 22, 3, "#222a38");
-    ctx.fillStyle = "#cfd6e6"; ctx.textAlign = "left";
-    ctx.fillText(id, d.x - 20, d.y - 28);
+    roundRect(d.x, d.y - 22, 90, 44, 6, "#a98258");
+    roundRect(d.x + 28, d.y - 18, 34, 22, 3, "#2a3142");
   }
 }
 
 function drawAgent(a, c, moving) {
   const bob = moving ? Math.sin(tick / 4) * 2 : 0;
-  ctx.fillStyle = "rgba(0,0,0,.25)";
+  ctx.fillStyle = "rgba(0,0,0,.2)";
   ctx.beginPath(); ctx.ellipse(c.x, c.y + 18, 13, 5, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = COLORS[a.id] || "#ccc";
   ctx.beginPath(); ctx.arc(c.x, c.y + bob, 15, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = "#222";
   ctx.beginPath(); ctx.arc(c.x - 5, c.y - 3 + bob, 2, 0, 7); ctx.arc(c.x + 5, c.y - 3 + bob, 2, 0, 7); ctx.fill();
   ctx.textAlign = "center"; ctx.font = "12px sans-serif";
-  ctx.fillStyle = "#fff"; ctx.fillText(a.name, c.x, c.y + 36);
+  ctx.fillStyle = "#4a3220"; ctx.fillText(a.name, c.x, c.y + 36);
   if (!moving && a.state !== "Idle") {
     const text = a.state === "Working" ? "⌨ カタカタ…" : "💬 …";
     const w = ctx.measureText(text).width + 14;
@@ -98,32 +137,57 @@ function drawAgent(a, c, moving) {
 
 function frame() {
   tick++;
+  ctx.clearRect(0, 0, W, H);
   drawBackground();
   for (const a of agents) {
+    if (!team.has(a.id)) continue;
     const t = targetFor(a);
-    const c = chars[a.id] || (chars[a.id] = { x: t.x, y: t.y });
+    const home = { x: DESKS[a.id].x + SEAT_OFFSET.x, y: DESKS[a.id].y + SEAT_OFFSET.y };
+    const c = chars[a.id] || (chars[a.id] = { ...home });
     const dx = t.x - c.x, dy = t.y - c.y, dist = Math.hypot(dx, dy);
     const moving = dist > 2;
-    if (moving) { const step = Math.min(1.6, dist); c.x += dx / dist * step; c.y += dy / dist * step; }
+    if (moving) { const step = Math.min(2.2, dist); c.x += dx / dist * step; c.y += dy / dist * step; }
     drawAgent(a, c, moving);
   }
   requestAnimationFrame(frame);
+}
+
+async function poll() {
+  try {
+    const res = await fetch("/state");
+    agents = (await res.json()).agents;
+    const p = agents.find(a => a.project);
+    document.getElementById("status").textContent =
+      (p ? "プロジェクト: " + p.project + " / " : "") +
+      agents.filter(a => team.has(a.id)).map(a => `${a.name}:${LABEL[a.state] || a.state}`).join("  ");
+  } catch (e) {
+    document.getElementById("status").textContent = "サーバーに接続できません";
+  }
 }
 
 document.getElementById("form").addEventListener("submit", async e => {
   e.preventDefault();
   const prompt = document.getElementById("prompt").value;
   const res = await fetch("/start_project", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt })
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, members: [...team] }),
   });
+  if (!res.ok) { alert("開始できませんでした"); return; }
   const data = await res.json();
-  document.getElementById("tasks").innerHTML = (data.tasks || []).map(t => "<li></li>").join("");
-  [...document.querySelectorAll("#tasks li")].forEach((li, i) => li.textContent = data.tasks[i]);
-  poll();
+  const ul = document.getElementById("tasks");
+  ul.replaceChildren(...(data.tasks || []).map(t => Object.assign(document.createElement("li"), { textContent: t })));
+  document.getElementById("select").classList.add("hidden");
+  document.getElementById("office").classList.remove("hidden");
+  for (const k in chars) delete chars[k];
+  await poll();
+  if (!polling) polling = setInterval(poll, 1000);
 });
 
-setInterval(poll, 1000);
-poll();
+document.getElementById("back").addEventListener("click", () => {
+  document.getElementById("office").classList.add("hidden");
+  document.getElementById("select").classList.remove("hidden");
+});
+
 frame();
 </script>
 </body>

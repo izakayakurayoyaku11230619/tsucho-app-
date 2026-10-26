@@ -14,16 +14,16 @@ AI社員が会議室・デスクを歩き回る様子をUnityで表示するプ�
     curl -X POST localhost:8000/start_project -H 'Content-Type: application/json' -d '{"prompt":"LPを作る"}'
     curl localhost:8000/state
 
-開始から5秒は全員 Meeting、その後20秒 Working、その後 Idle。Engineer は会議のあと8秒待ってから Working(`AGENTS` の `work_delay`)。プロジェクトは `project_id` ごとに複数持てて、重なった場合は最後に始めたものを優先する。`GET /projects` で一覧を返す。タスク分解(`decompose_task`)は、環境変数 `ANTHROPIC_API_KEY` があれば Claude API で行い、なければ(または失敗したら)固定のタスクを返す。モデルは `AI_OFFICE_MODEL` で変えられる(既定 `claude-sonnet-5-5`)。
+役割は CEO / Secretary / Editor / Designer。流れは、最初の5秒は参加者全員で会議、5〜10秒は社長が指示、10〜20秒はデザイナーと編集者が作業(秘書は5〜25秒作業)、20〜25秒は会議室でレビュー。各AIの動きは `AGENTS` の `timeline` で変える。`POST /start_project` の `members` で参加する役割を選べる(CEOは常に参加)。プロジェクトは `project_id` ごとに複数持てて、重なった場合は最後に始めたものを優先する。`GET /projects` で一覧を返す。タスク分解(`decompose_task`)は、環境変数 `ANTHROPIC_API_KEY` があれば Claude API で行い、なければ(または失敗したら)固定のタスクを返す。モデルは `AI_OFFICE_MODEL` で変えられる(既定 `claude-sonnet-5-5`)。
 
 ## ブラウザで見る(Unity不要)
 
-サーバーを起動して http://localhost:8000/ を開く。プロンプトを入れて「開始」を押すと、3人のAIが会議室とデスクを歩き回る。
+サーバーを起動して http://localhost:8000/ を開く。キャラ選択画面(`server/static/select.jpg` の絵にボタンを重ねてある)で、秘書・編集者・デザイナーの参加を切り替え(社長は必須)、社長への指示を入れて「開始」を押すと、AIが会議室と自席を歩き回る。
 
 ## Unity
 
 1. `unity/` の4つの `.cs` を `Assets/` に入れる。
-2. キャラに `AICharacterController` を付け、`agentId`(`CEO` / `Designer` / `Engineer`)、Animator、デスクと会議室のTransformを設定する。
+2. キャラに `AICharacterController` を付け、`agentId`(`CEO` / `Secretary` / `Editor` / `Designer`)、Animator、デスクと会議室のTransformを設定する。
 3. Animatorに bool `IsWalking` / `IsTyping` / `IsTalking` を作る。
 4. 空のGameObjectに `AIApiClient` を付け、`characters` に全キャラを登録する。
 5. ボタンから `AIApiClient.StartProject("...")` を呼ぶ。
