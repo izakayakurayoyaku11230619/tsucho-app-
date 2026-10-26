@@ -139,7 +139,19 @@ def start_project(req: StartRequest):
 
 @app.get("/projects")
 def list_projects():
-    return [{"project_id": pid, "prompt": p["prompt"], "tasks": p["tasks"]} for pid, p in projects.items()]
+    now = time.time()
+    return [
+        {
+            "project_id": pid,
+            "prompt": p["prompt"],
+            "tasks": p["tasks"],
+            "members": sorted(p["members"]),
+            "elapsed": round(now - p["started_at"], 1),
+            "duration": PROJECT_SECONDS,
+            "done": now - p["started_at"] >= PROJECT_SECONDS,
+        }
+        for pid, p in sorted(projects.items(), key=lambda kv: -kv[1]["started_at"])
+    ]
 
 
 @app.get("/state")

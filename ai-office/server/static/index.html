@@ -26,6 +26,17 @@
   .card b { display: block; margin: 6px 0 4px; }
   .badge { display: inline-block; padding: 2px 10px; border-radius: 10px; color: #fff; font-size: 13px; background: #aaa; }
   .badge.Meeting { background: #4a90e2; } .badge.Working { background: #3aa655; }
+  .tabs { display: flex; gap: 8px; margin: 8px 0; }
+  .tabs button { padding: 8px 18px; border-radius: 10px; border: 2px solid #c9a35a; background: #fff; color: #6b4a2b; font-weight: bold; }
+  .tabs button.on { background: #c9a35a; color: #fff; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+  .tile { background: #fff; border: 3px solid #e5c99a; border-radius: 14px; padding: 10px 12px; }
+  .tile small { color: #8a6b45; display: block; } .tile strong { font-size: 22px; }
+  .bar { height: 10px; border-radius: 6px; background: #f1e3c2; margin-top: 6px; overflow: hidden; } .bar i { display: block; height: 100%; background: #3aa655; width: 0; transition: width .5s; }
+  table.dash { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; margin: 10px 0; }
+  table.dash th, table.dash td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #f0e2c0; font-size: 14px; }
+  table.dash th { background: #f5e6bd; }
+  #log { background: #fff; border-radius: 12px; padding: 8px 12px; max-height: 180px; overflow: auto; font-size: 13px; }
   ul { padding-left: 20px; } #status { margin: 8px 0; }
   #extra { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .hint { margin: 6px 0; font-size: 14px; }
@@ -47,8 +58,21 @@
 
   <section id="office" class="hidden">
     <button class="back" id="back">← キャラ選択にもどる</button>
-    <canvas id="c" width="960" height="630"></canvas>
-    <div id="roster"></div>
+    <div class="tabs"><button class="on" data-tab="view">オフィス</button><button data-tab="dash">ダッシュボード</button></div>
+    <div id="dash" class="hidden">
+      <div class="tiles">
+        <div class="tile"><small>進行中のプロジェクト</small><strong id="t-proj">-</strong><div class="bar"><i id="t-bar"></i></div></div>
+        <div class="tile"><small>作業中</small><strong id="t-work">0</strong></div>
+        <div class="tile"><small>会議中</small><strong id="t-meet">0</strong></div>
+        <div class="tile"><small>待機中</small><strong id="t-idle">0</strong></div>
+        <div class="tile"><small>完了したプロジェクト</small><strong id="t-done">0</strong></div>
+      </div>
+      <table class="dash"><thead><tr><th>役割</th><th>状態</th><th>いまやっていること</th></tr></thead><tbody id="dash-rows"></tbody></table>
+      <h3>できごと</h3><div id="log"></div>
+      <h3>プロジェクト一覧</h3><table class="dash"><thead><tr><th>指示</th><th>状態</th><th>タスク</th></tr></thead><tbody id="proj-rows"></tbody></table>
+    </div>
+    <div id="view"><canvas id="c" width="960" height="630"></canvas>
+    <div id="roster"></div></div>
     <div id="status"></div>
     <ul id="tasks"></ul>
   </section>
@@ -293,11 +317,67 @@ function renderRoster() {
   }));
 }
 
+const DOING = {
+  CEO: { Meeting: "みんなに指示を出している", Working: "タスクを分けて割り振っている", Idle: "報告を待っている" },
+  Secretary: { Meeting: "議事録をとっている", Working: "スケジュールと資料を整理している", Idle: "待機している" },
+  PM: { Meeting: "進み具合を共有している", Working: "全体の進行を調整している", Idle: "待機している" },
+  Designer: { Meeting: "デザイン案を説明している", Working: "デザイン案を作っている", Idle: "指示を待っている" },
+  Illustrator: { Meeting: "イラストの方向性を相談している", Working: "イラストを描いている", Idle: "指示を待っている" },
+  Editor: { Meeting: "レビューしている", Working: "文章を整えている", Idle: "原稿を待っている" },
+  Programmer: { Meeting: "実装方針を相談している", Working: "コードを書いている", Idle: "指示を待っている" },
+  DataScientist: { Meeting: "分析結果を共有している", Working: "データを分析している", Idle: "データを待っている" },
+};
+const lastState = {};
+function addLog(text) {
+  const box = document.getElementById("log");
+  const row = document.createElement("div");
+  row.textContent = new Date().toLocaleTimeString("ja-JP") + "  " + text;
+  box.prepend(row);
+  while (box.children.length > 40) box.lastChild.remove();
+}
+function renderDashboard(projects) {
+  const mine = agents.filter(a => team.has(a.id));
+  const cnt = s => mine.filter(a => a.state === s).length;
+  document.getElementById("t-work").textContent = cnt("Working");
+  document.getElementById("t-meet").textContent = cnt("Meeting");
+  document.getElementById("t-idle").textContent = cnt("Idle");
+  const running = projects.find(p => !p.done);
+  document.getElementById("t-proj").textContent = running ? running.prompt : "なし";
+  document.getElementById("t-bar").style.width = running ? Math.min(100, running.elapsed / running.duration * 100) + "%" : "0";
+  document.getElementById("t-done").textContent = projects.filter(p => p.done).length;
+  document.getElementById("dash-rows").replaceChildren(...mine.map(a => {
+    const tr = document.createElement("tr");
+    const cells = [a.name, null, (DOING[a.id] || {})[a.state] || ""];
+    cells.forEach((t, i) => {
+      const td = document.createElement("td");
+      if (i === 1) { const b = document.createElement("span"); b.className = "badge " + a.state; b.textContent = LABEL[a.state] || a.state; td.append(b); }
+      else td.textContent = t;
+      tr.append(td);
+    });
+    return tr;
+  }));
+  document.getElementById("proj-rows").replaceChildren(...projects.map(p => {
+    const tr = document.createElement("tr");
+    [p.prompt, p.done ? "完了" : "進行中 " + Math.round(p.elapsed) + "/" + p.duration + "秒", p.tasks.join(" / ")].forEach(t => {
+      const td = document.createElement("td"); td.textContent = t; tr.append(td);
+    });
+    return tr;
+  }));
+}
+
 async function poll() {
   try {
     const res = await fetch("/state");
     agents = (await res.json()).agents;
     renderRoster();
+    for (const a of agents) {
+      if (!team.has(a.id)) continue;
+      if (lastState[a.id] !== undefined && lastState[a.id] !== a.state)
+        addLog(`${a.name}が「${LABEL[a.state]}」になった — ${(DOING[a.id] || {})[a.state] || ""}`);
+      lastState[a.id] = a.state;
+    }
+    const projects = await (await fetch("/projects")).json();
+    renderDashboard(projects);
     const p = agents.find(a => a.project);
     document.getElementById("status").textContent =
       (p ? "プロジェクト: " + p.project + " / " : "") +
@@ -324,6 +404,12 @@ document.getElementById("form").addEventListener("submit", async e => {
   await poll();
   if (!polling) polling = setInterval(poll, 1000);
 });
+
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  document.getElementById("view").classList.toggle("hidden", b.dataset.tab !== "view");
+  document.getElementById("dash").classList.toggle("hidden", b.dataset.tab !== "dash");
+}));
 
 document.getElementById("back").addEventListener("click", () => {
   document.getElementById("office").classList.add("hidden");
