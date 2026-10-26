@@ -26,8 +26,8 @@ M, W = State.MEETING, State.WORKING
 
 class StartRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=2000)
-    # 参加させる役割のid。社長(CEO)は常に参加する。
-    members: list[str] = Field(default_factory=lambda: ["CEO"])
+    # 参加させる役割のid。省略すると全員参加。社長(CEO)は常に参加する。
+    members: list[str] | None = None
 
 
 class Agent:
@@ -114,10 +114,11 @@ def target_for(state: State) -> str:
 
 @app.post("/start_project")
 def start_project(req: StartRequest):
-    unknown = [m for m in req.members if m not in AGENT_IDS]
+    requested = AGENT_IDS if req.members is None else set(req.members)
+    unknown = [m for m in requested if m not in AGENT_IDS]
     if unknown:
         raise HTTPException(status_code=422, detail=f"unknown members: {unknown}")
-    members = {"CEO", *req.members}
+    members = {"CEO", *requested}
     project_id = uuid.uuid4().hex[:8]
     projects[project_id] = {
         "prompt": req.prompt,

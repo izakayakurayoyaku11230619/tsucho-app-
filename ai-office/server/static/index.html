@@ -30,7 +30,7 @@
     <div id="stage">
       <img src="select.jpg" alt="Select Your Character">
     </div>
-    <p class="hint">社長は必ず参加します。秘書・編集者・デザイナーは SELECT で入れる/外すを切り替えられます(緑 = 参加)。</p>
+    <p class="hint">社長・秘書・編集者・デザイナーの4人は全員参加します(外せません)。</p>
     <form id="form">
       <input id="prompt" placeholder="社長への指示 例: ランディングページを作る" required maxlength="2000">
       <button class="go">開始</button>
@@ -48,9 +48,9 @@
 // 選択画面のボタン位置は、背景画像(2000x1116)の中の割合
 const PICKS = [
   { id: "CEO", label: "社長", x: 21.5, y: 21.9, locked: true },
-  { id: "Secretary", label: "秘書", x: 20.9, y: 59.9 },
-  { id: "Editor", label: "編集者", x: 57.0, y: 51.8 },
-  { id: "Designer", label: "デザイナー", x: 90.6, y: 66.9 },
+  { id: "Secretary", label: "秘書", x: 20.9, y: 59.9, locked: true },
+  { id: "Editor", label: "編集者", x: 57.0, y: 51.8, locked: true },
+  { id: "Designer", label: "デザイナー", x: 90.6, y: 66.9, locked: true },
 ];
 const team = new Set(["CEO", "Secretary", "Editor", "Designer"]);
 

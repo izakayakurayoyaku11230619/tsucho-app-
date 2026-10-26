@@ -14,11 +14,11 @@ AI社員が会議室・デスクを歩き回る様子をUnityで表示するプ�
     curl -X POST localhost:8000/start_project -H 'Content-Type: application/json' -d '{"prompt":"LPを作る"}'
     curl localhost:8000/state
 
-役割は CEO / Secretary / Editor / Designer。流れは、最初の5秒は参加者全員で会議、5〜10秒は社長が指示、10〜20秒はデザイナーと編集者が作業(秘書は5〜25秒作業)、20〜25秒は会議室でレビュー。各AIの動きは `AGENTS` の `timeline` で変える。`POST /start_project` の `members` で参加する役割を選べる(CEOは常に参加)。プロジェクトは `project_id` ごとに複数持てて、重なった場合は最後に始めたものを優先する。`GET /projects` で一覧を返す。タスク分解(`decompose_task`)は、環境変数 `ANTHROPIC_API_KEY` があれば Claude API で行い、なければ(または失敗したら)固定のタスクを返す。モデルは `AI_OFFICE_MODEL` で変えられる(既定 `claude-sonnet-5-5`)。
+役割は CEO / Secretary / Editor / Designer。流れは、最初の5秒は参加者全員で会議、5〜10秒は社長が指示、10〜20秒はデザイナーと編集者が作業(秘書は5〜25秒作業)、20〜25秒は会議室でレビュー。各AIの動きは `AGENTS` の `timeline` で変える。`POST /start_project` の `members` で参加する役割を絞れる(省略すると全員。画面からは外せない)。プロジェクトは `project_id` ごとに複数持てて、重なった場合は最後に始めたものを優先する。`GET /projects` で一覧を返す。タスク分解(`decompose_task`)は、環境変数 `ANTHROPIC_API_KEY` があれば Claude API で行い、なければ(または失敗したら)固定のタスクを返す。モデルは `AI_OFFICE_MODEL` で変えられる(既定 `claude-sonnet-5-5`)。
 
 ## ブラウザで見る(Unity不要)
 
-サーバーを起動して http://localhost:8000/ を開く。キャラ選択画面(`server/static/select.jpg` の絵にボタンを重ねてある)で、秘書・編集者・デザイナーの参加を切り替え(社長は必須)、社長への指示を入れて「開始」を押すと、AIが会議室と自席を歩き回る。
+サーバーを起動して http://localhost:8000/ を開く。キャラ選択画面(`server/static/select.jpg` の絵にボタンを重ねてある)で4人全員が参加することを確認し(外せない)、社長への指示を入れて「開始」を押すと、AIが会議室と自席を歩き回る。
 
 ## Unity
 
