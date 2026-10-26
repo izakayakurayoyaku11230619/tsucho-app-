@@ -5,7 +5,13 @@ AI社員が会議室・デスクを歩き回る様子をUnityで表示するプ�
 - `server/` FastAPI。`POST /start_project`(JSON `{"prompt": "..."}`)で開始、`GET /state` で各AIの状態を返す。
 - `unity/` Unityのスクリプト。`AIApiClient` が1秒ごとに `/state` を取得し、`AICharacterController` を動かす。
 
-## サーバー
+## いちばん簡単な起動(コマンド入力なし)
+
+1. https://github.com/izakayakurayoyaku11230619/tsucho-app-/archive/refs/heads/ai-office-prototype.zip を、GitHubにログインしたブラウザで開いてダウンロードし、展開する。
+2. 展開したフォルダの `ai-office` の中の `start.bat`(Windows)をダブルクリックする。Mac/Linux は `start.sh` を実行する。
+3. 初回は準備に少しかかる。そのあと、ブラウザで http://localhost:8000/ を開く(Windows は自動で開く)。Pythonが入っていなければ、案内が出る。
+
+## サーバー(手でやる場合)
 
     cd server
     pip install -r requirements.txt
