@@ -29,19 +29,20 @@
 <script>
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
-const POS = { MeetingRoom: { x: 520, y: 180 }, Desk: null };
-const DESKS = { CEO: { x: 100, y: 90 }, Designer: { x: 100, y: 180 }, Engineer: { x: 100, y: 270 } };
+const W = canvas.width, H = canvas.height;
+const ROOM = { x: 440, y: 40, w: 250, h: 280 };
+const DESKS = { CEO: { x: 120, y: 90 }, Designer: { x: 120, y: 190 }, Engineer: { x: 120, y: 290 } };
+const SEATS = { CEO: { x: 520, y: 140 }, Designer: { x: 610, y: 140 }, Engineer: { x: 565, y: 230 } };
 const COLORS = { CEO: "#e2b34a", Designer: "#e25a8a", Engineer: "#4ac28a" };
 const LABEL = { Idle: "待機中", Meeting: "会議中", Working: "作業中" };
 const chars = {};
 let agents = [];
+let tick = 0;
 
 function targetFor(a) {
-  if (a.target === "MeetingRoom") {
-    const i = agents.findIndex(x => x.id === a.id);
-    return { x: POS.MeetingRoom.x + (i - 1) * 50, y: POS.MeetingRoom.y };
-  }
-  return DESKS[a.id] || { x: 100, y: 180 };
+  if (a.target === "MeetingRoom") return SEATS[a.id] || { x: 565, y: 180 };
+  const d = DESKS[a.id] || { x: 120, y: 190 };
+  return { x: d.x + 70, y: d.y };
 }
 
 async function poll() {
@@ -56,28 +57,55 @@ async function poll() {
   }
 }
 
-function frame() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#3a4560";
-  ctx.fillRect(400, 60, 300, 240);
-  ctx.fillStyle = "#aab";
-  ctx.fillText("会議室", 410, 80);
+function roundRect(x, y, w, h, r, fill) {
+  ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+}
+
+function drawBackground() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "#2b3344"; ctx.fillRect(0, 0, W, H);
+  ctx.font = "13px sans-serif"; ctx.textAlign = "left";
+  roundRect(ROOM.x, ROOM.y, ROOM.w, ROOM.h, 12, "#394560");
+  roundRect(ROOM.x + 60, ROOM.y + 90, 130, 70, 35, "#5b4a3a");
+  ctx.fillStyle = "#cfd6e6"; ctx.fillText("会議室", ROOM.x + 12, ROOM.y + 22);
+  ctx.fillText("オフィス", 20, 22);
   for (const id in DESKS) {
     const d = DESKS[id];
-    ctx.fillStyle = "#555e78";
-    ctx.fillRect(d.x - 40, d.y - 14, 80, 28);
+    roundRect(d.x - 20, d.y - 22, 90, 44, 6, "#6a5a48");
+    roundRect(d.x + 8, d.y - 18, 34, 22, 3, "#222a38");
+    ctx.fillStyle = "#cfd6e6"; ctx.textAlign = "left";
+    ctx.fillText(id, d.x - 20, d.y - 28);
   }
+}
+
+function drawAgent(a, c, moving) {
+  const bob = moving ? Math.sin(tick / 4) * 2 : 0;
+  ctx.fillStyle = "rgba(0,0,0,.25)";
+  ctx.beginPath(); ctx.ellipse(c.x, c.y + 18, 13, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = COLORS[a.id] || "#ccc";
+  ctx.beginPath(); ctx.arc(c.x, c.y + bob, 15, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#222";
+  ctx.beginPath(); ctx.arc(c.x - 5, c.y - 3 + bob, 2, 0, 7); ctx.arc(c.x + 5, c.y - 3 + bob, 2, 0, 7); ctx.fill();
+  ctx.textAlign = "center"; ctx.font = "12px sans-serif";
+  ctx.fillStyle = "#fff"; ctx.fillText(a.name, c.x, c.y + 36);
+  if (!moving && a.state !== "Idle") {
+    const text = a.state === "Working" ? "⌨ カタカタ…" : "💬 …";
+    const w = ctx.measureText(text).width + 14;
+    roundRect(c.x - w / 2, c.y - 46, w, 20, 8, "#fff");
+    ctx.fillStyle = "#222"; ctx.fillText(text, c.x, c.y - 32);
+  }
+}
+
+function frame() {
+  tick++;
+  drawBackground();
   for (const a of agents) {
     const t = targetFor(a);
     const c = chars[a.id] || (chars[a.id] = { x: t.x, y: t.y });
     const dx = t.x - c.x, dy = t.y - c.y, dist = Math.hypot(dx, dy);
-    const arrived = dist < 2;
-    if (!arrived) { c.x += dx / dist * Math.min(2, dist); c.y += dy / dist * Math.min(2, dist); }
-    ctx.fillStyle = COLORS[a.id] || "#ccc";
-    ctx.beginPath(); ctx.arc(c.x, c.y, 14, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.textAlign = "center";
-    const mark = !arrived ? "…" : a.state === "Working" ? "⌨" : a.state === "Meeting" ? "💬" : "";
-    ctx.fillText(a.name + " " + mark, c.x, c.y - 22);
+    const moving = dist > 2;
+    if (moving) { const step = Math.min(1.6, dist); c.x += dx / dist * step; c.y += dy / dist * step; }
+    drawAgent(a, c, moving);
   }
   requestAnimationFrame(frame);
 }
