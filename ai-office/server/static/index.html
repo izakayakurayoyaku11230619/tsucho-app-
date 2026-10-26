@@ -54,10 +54,10 @@
     <p class="hint">8人の役割は全員参加します(外せません)。上の絵にいない4人は下のカードです。</p>
     <div id="extra"></div>
     <form id="keyform" class="keybox">
-      <label>Anthropic の APIキー <span id="keystate" class="badge">未設定</span></label>
+      <label>AIの使い方 <span id="keystate" class="badge">確認中</span></label>
       <div class="row"><input id="apikey" type="password" autocomplete="off" placeholder="sk-ant-..." minlength="10">
       <button class="save" type="submit">保存</button><button class="back" type="button" id="keyclear">削除</button></div>
-      <small>キーはこのサーバーのメモリにだけ置きます(ファイルやログには書かず、画面にも戻しません)。サーバーを止めると消えます。他の人がつなげる場所には公開しないでください。</small>
+      <small>APIキーは入れなくても、このサーバーを動かすPCで Claude Code(`claude` コマンド)にログインしていれば、それを自動で使います。キーを入れた場合はそちらを優先します。キーはこのサーバーのメモリにだけ置きます(ファイルやログには書かず、画面にも戻しません)。サーバーを止めると消えます。他の人がつなげる場所には公開しないでください。</small>
     </form>
     <form id="form">
       <input id="prompt" placeholder="社長への指示 例: ランディングページを作る" required maxlength="2000">
@@ -379,8 +379,8 @@ async function refreshKey() {
   try {
     const st = await (await fetch("/settings")).json();
     const b = document.getElementById("keystate");
-    b.textContent = st.has_key ? "設定済み(" + (st.source === "app" ? "画面から" : "環境変数") + ")" : "未設定";
-    b.classList.toggle("ok", st.has_key);
+    b.textContent = st.engine === "api" ? "APIキーで動作中" : st.engine === "claude_code" ? "このPCの Claude Code で動作中" : "未設定(固定のタスクで動作)";
+    b.classList.toggle("ok", !!st.engine);
   } catch (e) {}
 }
 document.getElementById("keyform").addEventListener("submit", async e => {

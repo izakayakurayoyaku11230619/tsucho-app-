@@ -1,6 +1,10 @@
 import json
 import logging
 import os
+import re
+import shutil
+import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -93,23 +97,52 @@ def get_client():
     return anthropic.Anthropic(api_key=key)
 
 
+def engine() -> str | None:
+    """使うAIの種類。APIキーがあれば "api"、なければ PC の Claude Code(`claude` コマンド)を使う。"""
+    if _api_key or os.environ.get("ANTHROPIC_API_KEY"):
+        return "api"
+    if shutil.which("claude"):
+        return "claude_code"
+    return None
+
+
+def llm(system: str, user: str, max_tokens: int) -> str:
+    """文章を1つ返す。どちらの方式でも同じ呼び方で使える。"""
+    kind = engine()
+    if kind == "api":
+        res = get_client().messages.create(
+            model=MODEL,
+            max_tokens=max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        return res.content[0].text
+    if kind == "claude_code":
+        # ログイン済みの Claude Code に1回だけ質問する。入力は標準入力で渡し、
+        # 作業フォルダは空の一時フォルダにして、手元のファイルを読ませない。
+        prompt = f"{system}\n\nツールやファイルは使わず、文章だけで答えてください。\n\n{user}"
+        with tempfile.TemporaryDirectory() as tmp:
+            res = subprocess.run(
+                ["claude", "-p"], input=prompt, capture_output=True, text=True, timeout=180, cwd=tmp
+            )
+        if res.returncode != 0:
+            raise RuntimeError(f"claude コマンドが失敗しました (code {res.returncode})")
+        return res.stdout.strip()
+    raise RuntimeError("AIが使えません")
+
+
 def fallback_tasks(prompt: str) -> list[str]:
     return [f"『{prompt}』の要件を整理する", "デザイン案を作る", "文章を整えてレビューする"]
 
 
 def decompose_task(prompt: str) -> list[str]:
-    """社長AIがタスクを分解する。APIキーがないか失敗したら固定のタスクを返す。"""
+    """社長AIがタスクを分解する。AIが使えないか失敗したら固定のタスクを返す。"""
+    if engine() is None:
+        return fallback_tasks(prompt)
     try:
-        client = get_client()
-        if client is None:
-            return fallback_tasks(prompt)
-        res = client.messages.create(
-            model=MODEL,
-            max_tokens=500,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        tasks = json.loads(res.content[0].text)
+        text = llm(SYSTEM_PROMPT, prompt, 500)
+        found = re.search(r"\[.*\]", text, re.S)  # 前置きがついても配列だけ取り出す
+        tasks = json.loads(found.group(0) if found else text)
         if isinstance(tasks, list) and tasks and all(isinstance(t, str) for t in tasks):
             return tasks[:5]
     except Exception:
@@ -121,21 +154,19 @@ def make_output(project: dict, role: str) -> None:
     """各AIが実際の成果物を書く。結果は project["outputs"][role] に入る。"""
     outputs = project["outputs"]
     try:
-        client = get_client()
-        if client is None:
-            outputs[role] = {"status": "no_key", "text": "APIキーを設定すると、ここにこの役割の成果物が出ます。"}
+        if engine() is None:
+            outputs[role] = {"status": "no_key", "text": "APIキーを設定するか、PCで Claude Code を使える状態にすると、ここにこの役割の成果物が出ます。"}
             return
         outputs[role] = {"status": "working", "text": ""}
-        res = client.messages.create(
-            model=MODEL,
-            max_tokens=700,
-            system=f"あなたは小さな会社の社員AIです。{ROLE_PROMPTS[role]}。日本語で、簡潔に、見出しや箇条書きを使ってください。",
-            messages=[{"role": "user", "content": f"依頼: {project['prompt']}\nタスク: " + " / ".join(project["tasks"])}],
+        text = llm(
+            f"あなたは小さな会社の社員AIです。{ROLE_PROMPTS[role]}。日本語で、簡潔に、見出しや箇条書きを使ってください。",
+            f"依頼: {project['prompt']}\nタスク: " + " / ".join(project["tasks"]),
+            700,
         )
-        outputs[role] = {"status": "done", "text": res.content[0].text}
+        outputs[role] = {"status": "done", "text": text}
     except Exception:
         logging.exception("成果物の作成に失敗: %s", role)
-        outputs[role] = {"status": "error", "text": "成果物を作れませんでした。APIキーやモデル名を確かめてください。"}
+        outputs[role] = {"status": "error", "text": "成果物を作れませんでした。APIキーかClaude Codeのログインを確かめてください。"}
 
 
 def state_in_project(agent: Agent, project: dict, now: float) -> State:
@@ -194,9 +225,8 @@ class KeyRequest(BaseModel):
 
 @app.get("/settings")
 def get_settings():
-    """キー自体は返さない。設定済みかどうかだけ返す。"""
-    source = "app" if _api_key else "env" if os.environ.get("ANTHROPIC_API_KEY") else None
-    return {"has_key": source is not None, "source": source, "model": MODEL}
+    """キー自体は返さない。どのAIを使うかだけ返す。"""
+    return {"engine": engine(), "has_key": bool(_api_key or os.environ.get("ANTHROPIC_API_KEY")), "model": MODEL}
 
 
 @app.post("/settings/api_key")
@@ -210,7 +240,7 @@ def set_api_key(req: KeyRequest):
 def clear_api_key():
     global _api_key
     _api_key = None
-    return {"has_key": bool(os.environ.get("ANTHROPIC_API_KEY"))}
+    return {"engine": engine()}
 
 
 @app.get("/projects")
