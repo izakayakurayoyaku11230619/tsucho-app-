@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Office</title>
+<style>
+  body { margin: 0; font-family: sans-serif; background: #fff4c8; color: #4a3220; }
+  main { max-width: 1500px; margin: 0 auto; padding: 12px; }
+  h1 { margin: 4px 0 10px; font-size: 20px; }
+  .hidden { display: none !important; }
+  #stage { position: relative; line-height: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  #stage img { width: 100%; display: block; }
+  .pick { position: absolute; transform: translate(-50%, -50%); line-height: 1; padding: 6px 14px; border-radius: 16px;
+          border: 3px solid #fff; background: #f0883e; color: #fff; font-weight: bold; font-size: clamp(11px, 2vw, 18px); cursor: pointer; white-space: nowrap; }
+  .pick.on { background: #3aa655; }
+  .pick.locked { background: #b08a2e; cursor: default; }
+  form { display: flex; gap: 8px; margin: 12px 0; }
+  input { flex: 1; padding: 12px; border-radius: 8px; border: 2px solid #e0b860; font-size: 16px; }
+  button.go, button.save { padding: 12px 22px; border-radius: 8px; border: 0; background: #f0883e; color: #fff; font-size: 16px; font-weight: bold; }
+  button.back { padding: 8px 14px; border-radius: 8px; border: 0; background: #c9a35a; color: #fff; }
+  canvas { width: 100%; background: #fbf3dc; border-radius: 12px; display: block; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  #roster { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+  .card { background: #fff; border: 3px solid #e5c99a; border-radius: 16px; padding: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,.12); }
+  .card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; display: block; }
+  .card b { display: block; margin: 6px 0 4px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 10px; color: #fff; font-size: 13px; background: #aaa; }
+  .badge.Meeting { background: #4a90e2; } .badge.Working { background: #3aa655; }
+  .tabs { display: flex; gap: 8px; margin: 8px 0; }
+  .tabs button { padding: 8px 18px; border-radius: 10px; border: 2px solid #c9a35a; background: #fff; color: #6b4a2b; font-weight: bold; }
+  .tabs button.on { background: #c9a35a; color: #fff; }
+  .tools { display: flex; gap: 8px; margin: 0 0 8px; }
+  .tools button { padding: 6px 14px; border-radius: 10px; border: 2px solid #c9a35a; background: #fff; color: #6b4a2b; font-weight: bold; }
+  main.wide { max-width: none; }
+  canvas:fullscreen { width: 100vw; height: 100vh; object-fit: contain; border-radius: 0; background: #fbf3dc; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+  .tile { background: #fff; border: 3px solid #e5c99a; border-radius: 14px; padding: 10px 12px; }
+  .tile small { color: #8a6b45; display: block; } .tile strong { font-size: 22px; }
+  .bar { height: 10px; border-radius: 6px; background: #f1e3c2; margin-top: 6px; overflow: hidden; } .bar i { display: block; height: 100%; background: #3aa655; width: 0; transition: width .5s; }
+  table.dash { width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden; margin: 10px 0; }
+  table.dash th, table.dash td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #f0e2c0; font-size: 14px; }
+  table.dash th { background: #f5e6bd; }
+  #log { background: #fff; border-radius: 12px; padding: 8px 12px; max-height: 180px; overflow: auto; font-size: 13px; }
+  ul { padding-left: 20px; } #status { margin: 8px 0; }
+  #extra { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .keybox { background: #fff; border: 3px solid #e5c99a; border-radius: 14px; padding: 10px 12px; margin: 12px 0; }
+  .keybox label { display: block; font-weight: bold; } .keybox .row { display: flex; gap: 8px; margin: 6px 0; } .keybox button { white-space: nowrap; padding: 8px 16px; } .keybox small { color: #8a6b45; }
+  .card img, .card canvas { transform-origin: 50% 90%; }
+  .card.Working img, .card.Working canvas { animation: typing .5s ease-in-out infinite alternate; }
+  .card.Meeting img, .card.Meeting canvas { animation: talk 1s ease-in-out infinite; }
+  .card.Idle img, .card.Idle canvas { animation: float 3s ease-in-out infinite; }
+  @keyframes typing { from { transform: translateY(0) rotate(-1deg); } to { transform: translateY(-3px) rotate(1deg); } }
+  @keyframes talk { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05) rotate(-1.5deg); } }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  #extra .card:hover canvas { animation: talk .8s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .card img, .card canvas { animation: none !important; } }
+  .badge.ok { background: #3aa655; }
+  .hint { margin: 6px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <section id="select">
+    <div id="stage">
+      <img src="select.jpg" alt="Select Your Character">
+    </div>
+    <p class="hint">8人の役割は全員参加します(外せません)。上の絵にいない4人は下のカードです。</p>
+    <div id="extra"></div>
+    <form id="keyform" class="keybox">
+      <label>AIの使い方 <span id="keystate" class="badge">確認中</span></label>
+      <div class="row"><input id="apikey" type="password" autocomplete="off" placeholder="sk-ant-..." minlength="10">
+      <button class="save" type="submit">保存</button><button class="back" type="button" id="keyclear">削除</button></div>
+      <small>APIキーは入れなくても、このサーバーを動かすPCで Claude Code(`claude` コマンド)にログインしていれば、それを自動で使います。キーを入れた場合はそちらを優先します。キーはこのサーバーのメモリにだけ置きます(ファイルやログには書かず、画面にも戻しません)。サーバーを止めると消えます。他の人がつなげる場所には公開しないでください。</small>
+    </form>
+    <form id="form">
+      <input id="prompt" placeholder="社長への指示 例: ランディングページを作る" required maxlength="2000">
+      <button class="go">開始</button>
+    </form>
+  </section>
+
+  <section id="office" class="hidden">
+    <button class="back" id="back">← キャラ選択にもどる</button>
+    <div class="tabs"><button class="on" data-tab="view">オフィス</button><button data-tab="dash">ダッシュボード</button></div>
+    <div class="tools"><button type="button" id="zoom">画面いっぱいに広げる</button><button type="button" id="fs">全画面</button></div>
+    <div id="dash" class="hidden">
+      <div class="tiles">
+        <div class="tile"><small>進行中のプロジェクト</small><strong id="t-proj">-</strong><div class="bar"><i id="t-bar"></i></div></div>
+        <div class="tile"><small>作業中</small><strong id="t-work">0</strong></div>
+        <div class="tile"><small>会議中</small><strong id="t-meet">0</strong></div>
+        <div class="tile"><small>待機中</small><strong id="t-idle">0</strong></div>
+        <div class="tile"><small>完了したプロジェクト</small><strong id="t-done">0</strong></div>
+      </div>
+      <table class="dash"><thead><tr><th>役割</th><th>状態</th><th>いまやっていること</th></tr></thead><tbody id="dash-rows"></tbody></table>
+      <h3>できごと</h3><div id="log"></div>
+      <h3>成果物(最新のプロジェクト)</h3><div id="outputs"></div>
+      <h3>プロジェクト一覧</h3><table class="dash"><thead><tr><th>指示</th><th>状態</th><th>タスク</th></tr></thead><tbody id="proj-rows"></tbody></table>
+    </div>
+    <div id="view"><canvas id="c" width="960" height="630"></canvas>
+    <div id="roster"></div></div>
+    <div id="status"></div>
+    <ul id="tasks"></ul>
+  </section>
+</main>
+<script>
+// 選択画面のボタン位置は、背景画像(2000x1116)の中の割合
+const PICKS = [
+  { id: "CEO", label: "社長", x: 21.5, y: 21.9, locked: true },
+  { id: "Secretary", label: "秘書", x: 20.9, y: 59.9, locked: true },
+  { id: "Editor", label: "編集者", x: 57.0, y: 51.8, locked: true },
+  { id: "Designer", label: "デザイナー", x: 90.6, y: 66.9, locked: true },
+];
+const ROLE_NAMES = { CEO: "社長", Secretary: "秘書", PM: "マネージャー", Designer: "デザイナー", Illustrator: "イラストレーター", Editor: "編集者", Programmer: "プログラマー", DataScientist: "データ分析" };
+const team = new Set(Object.keys(ROLE_NAMES));
+
+const stage = document.getElementById("stage");
+for (const p of PICKS) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "pick on" + (p.locked ? " locked" : "");
+  b.style.left = p.x + "%"; b.style.top = p.y + "%";
+  const refresh = () => { b.textContent = (team.has(p.id) ? "✓ " : "") + p.label; b.classList.toggle("on", team.has(p.id)); };
+  b.addEventListener("click", () => {
+    if (p.locked) return;
+    team.has(p.id) ? team.delete(p.id) : team.add(p.id);
+    refresh();
+  });
+  refresh();
+  stage.appendChild(b);
+}
+
+// ---- オフィス画面(かわいい表示) ----
+let canvas = document.getElementById("c");
+let ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+const ROOMS = [
+  { name: "社長室", icon: "🪴", x: 20, y: 20, w: 220, h: 200, color: "#fbe6c8", edge: "#e8c48f" },
+  { name: "会議室", icon: "💡", x: 260, y: 20, w: 680, h: 200, color: "#d9e9f6", edge: "#a9c9e6" },
+  { name: "秘書デスク", icon: "📅", x: 20, y: 240, w: 220, h: 180, color: "#fbdcd9", edge: "#eeb1ab" },
+  { name: "企画室", icon: "📋", x: 260, y: 240, w: 220, h: 180, color: "#efe3c4", edge: "#d6c08a" },
+  { name: "編集室", icon: "🎧", x: 500, y: 240, w: 220, h: 180, color: "#d3efe3", edge: "#9fd3bd" },
+  { name: "デザイン室", icon: "🎨", x: 740, y: 240, w: 200, h: 180, color: "#e1ebfa", edge: "#aac3ea" },
+  { name: "イラスト室", icon: "🖌️", x: 20, y: 440, w: 300, h: 170, color: "#f1e1f5", edge: "#cfa8da" },
+  { name: "開発室", icon: "💻", x: 340, y: 440, w: 300, h: 170, color: "#dcefd4", edge: "#a7cf96" },
+  { name: "データ室", icon: "📊", x: 660, y: 440, w: 280, h: 170, color: "#d6eef0", edge: "#9acdd2" },
+];
+const DESKS = {
+  CEO: { x: 50, y: 100 }, Secretary: { x: 105, y: 300 }, PM: { x: 345, y: 300 }, Editor: { x: 585, y: 300 },
+  Designer: { x: 810, y: 300 }, Illustrator: { x: 105, y: 500 }, Programmer: { x: 445, y: 500 }, DataScientist: { x: 745, y: 500 },
+};
+const SEAT_OFFSET = { x: 45, y: 54 };
+const MEETING_SEATS = {
+  Secretary: { x: 430, y: 62 }, PM: { x: 540, y: 62 }, Editor: { x: 650, y: 62 }, Illustrator: { x: 760, y: 62 },
+  CEO: { x: 430, y: 172 }, Designer: { x: 540, y: 172 }, Programmer: { x: 650, y: 172 }, DataScientist: { x: 760, y: 172 },
+};
+const LOOK = {
+  CEO:       { body: "#8b6b4a", hair: "#d9dde3", pill: "#b98a2e" },
+  Secretary: { body: "#f4a6b8", hair: "#5a3a2a", pill: "#e0709a" },
+  PM:        { body: "#4a6fa5", hair: "#2a2a3a", pill: "#4a6fa5" },
+  Editor:    { body: "#d9534f", hair: "#4a3020", pill: "#e2a24a" },
+  Designer:  { body: "#f2c14e", hair: "#6b4226", pill: "#e25a8a" },
+  Illustrator: { body: "#b58be0", hair: "#8a4b3a", pill: "#9b6bd0" },
+  Programmer:  { body: "#5b9a5f", hair: "#2f2a26", pill: "#3f8a5a" },
+  DataScientist: { body: "#f1f5fa", hair: "#2aa6a6", pill: "#2a9aa0" },
+};
+const LABEL = { Idle: "待機中", Meeting: "会議中", Working: "作業中" };
+const chars = {};
+let agents = [];
+let tick = 0;
+let polling = null;
+
+function targetFor(a) {
+  if (a.target === "MeetingRoom") return MEETING_SEATS[a.id];
+  const d = DESKS[a.id];
+  return { x: d.x + SEAT_OFFSET.x, y: d.y + SEAT_OFFSET.y };
+}
+
+function rr(x, y, w, h, r, fill, stroke) {
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+}
+function circle(x, y, r, fill, stroke) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); } }
+const OUT = "#6b4a2b";
+function emoji(t, x, y, size) { ctx.font = size + "px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#000"; ctx.fillText(t, x, y); }
+
+function drawBackground() {
+  // 床(木目)
+  ctx.fillStyle = "#f3d9a4"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(190,140,70,.12)";
+  for (let y = 0; y < H; y += 28) ctx.fillRect(0, y, W, 2);
+  for (const r of ROOMS) {
+    rr(r.x + 3, r.y + 5, r.w, r.h, 18, "rgba(120,80,30,.18)");
+    rr(r.x, r.y, r.w, r.h, 18, r.color, r.edge);
+    ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "#6b4a2b";
+    ctx.fillText(r.name, r.x + 14, r.y + 24);
+    emoji(r.icon, r.x + r.w - 24, r.y + 28, 20);
+  }
+  // 社長室: 赤い丸ラグ・窓・本
+  ctx.beginPath(); ctx.ellipse(150, 165, 75, 34, 0, 0, 7); ctx.fillStyle = "#f0a09a"; ctx.fill();
+  rr(120, 34, 70, 40, 6, "#bfe4f5", "#8b6b4a"); ctx.fillStyle = "#8b6b4a"; ctx.fillRect(154, 34, 2, 40);
+  emoji("📚", 215, 205, 22); emoji("🪴", 38, 205, 24);
+  // 各部屋の小物
+  emoji("☎️", 205, 300, 18); emoji("🪴", 38, 405, 22); emoji("📝", 215, 405, 18);          // 秘書
+  emoji("🗂️", 450, 300, 20); emoji("📎", 275, 405, 16); emoji("🪴", 455, 405, 22);         // 企画
+  emoji("📚", 690, 300, 22); rr(570, 385, 110, 24, 10, "#7fb2d6"); emoji("☕", 520, 405, 18);  // 編集
+  emoji("🖌️", 910, 300, 20); emoji("🪴", 760, 405, 22); emoji("💡", 910, 405, 20);         // デザイン
+  emoji("🎨", 290, 595, 22); emoji("🪴", 40, 595, 22); emoji("⭐", 200, 480, 16);          // イラスト
+  emoji("🥤", 610, 595, 18); emoji("🪴", 360, 595, 22); emoji("🐞", 560, 480, 16);         // 開発
+  emoji("📈", 900, 595, 22); emoji("🧪", 690, 595, 20); emoji("🪴", 850, 480, 22);         // データ
+  // 会議室: ホワイトボード、スクリーン、丸テーブル
+  rr(285, 52, 100, 62, 6, "#fff", "#b8c7d6");
+  ctx.strokeStyle = "#e2735a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(295, 104); ctx.lineTo(318, 82); ctx.lineTo(340, 92); ctx.lineTo(372, 64); ctx.stroke();
+  ctx.font = "12px sans-serif"; ctx.fillStyle = "#555"; ctx.textAlign = "left"; ctx.fillText("アイデア", 291, 70); emoji("💡", 375, 100, 14);
+  rr(820, 52, 105, 62, 6, "#f5f8ff", "#9bb0c9");
+  ["#f2a65a", "#7fb2d6", "#7fc79a"].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(840 + i * 24, 106 - (i + 1) * 14, 16, (i + 1) * 14); });
+  ctx.beginPath(); ctx.ellipse(595, 130, 235, 34, 0, 0, 7); ctx.fillStyle = "#c98f58"; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(595, 126, 235, 34, 0, 0, 7); ctx.fillStyle = "#e0a96d"; ctx.fill();
+  emoji("☕", 500, 134, 16); emoji("💻", 600, 128, 16); emoji("🍪", 700, 134, 16);
+  // 机
+  for (const id in DESKS) {
+    if (!team.has(id)) continue;
+    const d = DESKS[id];
+    rr(d.x, d.y - 20, 90, 40, 8, "#c68f55");
+    rr(d.x + 3, d.y - 20, 84, 30, 8, "#e0a96d");
+    rr(d.x + 26, d.y - 40, 38, 24, 4, "#2a3142");
+    rr(d.x + 29, d.y - 37, 32, 18, 3, "#8fd0ff");
+    rr(d.x + 37, d.y - 16, 16, 4, 2, "#fff");
+  }
+}
+
+function drawAgent(a, c, moving, bare) {
+  const L = LOOK[a.id] || LOOK.CEO;
+  const working = !moving && a.state === "Working";
+  const meeting = !moving && a.state === "Meeting";
+  const phase = (a.id.length * 7) % 20;
+  const bob = moving ? Math.abs(Math.sin(tick / 3)) * -3 : working ? Math.sin(tick / 5 + phase) * 1.2 : meeting ? Math.abs(Math.sin(tick / 14 + phase)) * -2.5 : Math.sin(tick / 22 + phase) * 1.4;
+  const x = c.x, y = c.y + bob;
+  // 影
+  ctx.beginPath(); ctx.ellipse(x, c.y + 30, 16, 5, 0, 0, 7); ctx.fillStyle = "rgba(90,60,20,.25)"; ctx.fill();
+  // 足
+  const step = moving ? Math.sin(tick / 3) * 4 : 0;
+  rr(x - 9 + step, y + 20, 7, 10, 3, "#5a4636"); rr(x + 2 - step, y + 20, 7, 10, 3, "#5a4636");
+  // 体
+  rr(x - 13, y + 2, 26, 22, 9, L.body, OUT);
+  if (a.id === "Editor") { ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1.5; for (let i = -8; i <= 8; i += 8) { ctx.beginPath(); ctx.moveTo(x + i, y + 4); ctx.lineTo(x + i, y + 22); ctx.stroke(); } for (let j = 8; j <= 20; j += 8) { ctx.beginPath(); ctx.moveTo(x - 12, y + j); ctx.lineTo(x + 12, y + j); ctx.stroke(); } }
+  if (a.id === "Designer") { ["#e25a5a", "#f2a65a", "#7fc79a", "#6aa6e0"].forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(x - 12, y + 6 + i * 4, 24, 2.5); }); }
+  if (a.id === "CEO") { rr(x - 5, y + 3, 10, 20, 3, "#f4efe6"); ctx.fillStyle = "#c0392b"; ctx.fillRect(x - 1.5, y + 5, 3, 10); }
+  // 腕(作業中は上下に動く)
+  const arm = working ? Math.sin(tick / 2 + (a.id.length)) * 3 : 0;
+  const wave = meeting && Math.sin(tick / 18 + phase) > 0.35;   // 会議中は時々、手を挙げて話す
+  rr(x - 18, y + 8 + arm, 7, 14, 3, L.body, OUT);
+  if (wave) rr(x + 13, y - 6 + Math.sin(tick / 4) * 3, 7, 14, 3, L.body, OUT); else rr(x + 11, y + 8 - arm, 7, 14, 3, L.body, OUT);
+  // 後ろ髪
+  if (a.id === "Designer") rr(x - 18, y - 22, 36, 34, 14, L.hair, OUT);
+  if (a.id === "Secretary") circle(x, y - 38, 8, L.hair);
+  // 顔
+  circle(x, y - 12, 17, "#ffe3c8", OUT);
+  // 髪
+  ctx.fillStyle = L.hair; ctx.beginPath(); ctx.arc(x, y - 14, 18, Math.PI, 0); ctx.fill(); ctx.strokeStyle = OUT; ctx.lineWidth = 2; ctx.stroke();
+  if (a.id === "CEO") { circle(x - 16, y - 16, 4, L.hair); circle(x + 16, y - 16, 4, L.hair); }
+  if (a.id === "Designer") { rr(x + 7, y - 28, 8, 4, 2, "#e8484d"); }
+  if (a.id === "Editor") { ctx.strokeStyle = "#444"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y - 16, 19, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); rr(x - 22, y - 18, 7, 12, 3, "#444"); rr(x + 15, y - 18, 7, 12, 3, "#444"); }
+  if (a.id === "PM") { rr(x - 4, y + 3, 8, 14, 3, "#fff"); ctx.fillStyle = "#c0392b"; ctx.fillRect(x - 1.5, y + 5, 3, 9); }
+  if (a.id === "Programmer") { circle(x, y - 24, 8, L.body, OUT); ctx.fillStyle = L.hair; ctx.beginPath(); ctx.arc(x, y - 14, 18, Math.PI, 0); ctx.fill(); ctx.strokeStyle = OUT; ctx.lineWidth = 2; ctx.stroke(); }
+  if (a.id === "Illustrator") { ctx.fillStyle = "#7a4fb0"; ctx.beginPath(); ctx.ellipse(x - 2, y - 28, 15, 7, -0.15, 0, 7); ctx.fill(); ctx.strokeStyle = OUT; ctx.lineWidth = 2; ctx.stroke(); circle(x - 2, y - 36, 2.5, "#7a4fb0", OUT); }
+  if (a.id === "DataScientist") { circle(x + 12, y - 20, 6, L.hair, OUT); }
+  // 目・ほっぺ・口
+  const blink = !bare && tick % 220 < 6;
+  ctx.fillStyle = "#3a2a20";
+  if (blink) { ctx.fillRect(x - 8, y - 10, 5, 1.5); ctx.fillRect(x + 3, y - 10, 5, 1.5); }
+  else { circle(x - 5.5, y - 10, 2.4, "#3a2a20"); circle(x + 5.5, y - 10, 2.4, "#3a2a20"); circle(x - 4.8, y - 11, 0.9, "#fff"); circle(x + 6.2, y - 11, 0.9, "#fff"); }
+  circle(x - 10, y - 5, 3, "rgba(255,130,130,.45)"); circle(x + 10, y - 5, 3, "rgba(255,130,130,.45)");
+  if (a.id === "Programmer" || a.id === "DataScientist") { ctx.strokeStyle = a.id === "Programmer" ? "#334" : "#2a9aa0"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x - 5.5, y - 10, 5, 0, 7); ctx.arc(x + 5.5, y - 10, 5, 0, 7); ctx.stroke(); }
+  if (a.id === "Secretary") { ctx.strokeStyle = "#d33"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x - 5.5, y - 10, 5, 0, 7); ctx.arc(x + 5.5, y - 10, 5, 0, 7); ctx.stroke(); }
+  if (a.id === "CEO") { ctx.strokeStyle = "#ccc"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 9, y - 16); ctx.lineTo(x - 2, y - 16); ctx.moveTo(x + 2, y - 16); ctx.lineTo(x + 9, y - 16); ctx.stroke(); }
+  ctx.strokeStyle = "#a0453a"; ctx.lineWidth = 1.6; ctx.beginPath();
+  if (meeting && Math.floor(tick / 12) % 2 === 0) { ctx.ellipse(x, y - 2, 3, 2.5, 0, 0, 7); ctx.fillStyle = "#c0554a"; ctx.fill(); }
+  else { ctx.arc(x, y - 4, 4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); }
+  if (bare) return;
+  // 名前リボン
+  ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+  const tw = ctx.measureText(a.name).width + 16;
+  rr(x - tw / 2, c.y + 36, tw, 18, 9, L.pill);
+  ctx.fillStyle = "#fff"; ctx.fillText(a.name, x, c.y + 49);
+  // 吹き出し・演出
+  let text = null;
+  if (working) text = a.id === "CEO" ? "もしもし" : a.id === "Designer" ? "💡 ひらめき!" : a.id === "Editor" ? "♪ カタカタ" : a.id === "Programmer" ? "⌨ コード中" : a.id === "DataScientist" ? "📊 分析中" : a.id === "Illustrator" ? "🖌️ ぬりぬり" : a.id === "PM" ? "📋 調整中" : "⌨ カタカタ…";
+  else if (meeting) text = ["…", "？", "アイデア!", "なるほど"][(Math.floor(tick / 90) + a.id.length) % 4];
+  else if (!moving) text = a.state === "Idle" ? "zZ" : null;
+  if (text) {
+    ctx.font = "bold 12px sans-serif";
+    const w = ctx.measureText(text).width + 18;
+    const by = y - 52 - (Math.sin(tick / 15) + 1) * 1.5;
+    rr(x - w / 2, by, w, 22, 11, "#fff", "#e5c99a");
+    ctx.beginPath(); ctx.moveTo(x - 4, by + 21); ctx.lineTo(x + 2, by + 21); ctx.lineTo(x - 1, by + 27); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.fillStyle = "#4a3220"; ctx.fillText(text, x, by + 15);
+  }
+  if (working && a.id === "Editor") emoji("♪", x + 30 + Math.sin(tick / 10) * 4, y - 20 - (tick % 60) / 3, 14);
+  if (working && a.id === "Designer") emoji("✨", x + 28, y - 30 + Math.sin(tick / 8) * 3, 14);
+}
+
+function frame() {
+  tick++;
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();
+  const list = agents.filter(a => team.has(a.id)).map(a => {
+    const t0 = targetFor(a);
+    const t = { ...t0 };
+    const home = { x: DESKS[a.id].x + SEAT_OFFSET.x, y: DESKS[a.id].y + SEAT_OFFSET.y };
+    const c = chars[a.id] || (chars[a.id] = { ...home });
+    // 待機中は、席のまわりを時々うろうろ歩く(作業中・会議中は席から動かない)
+    if (a.state === "Idle") {
+      if (!(tick < c.wt)) { c.ox = (Math.random() - 0.5) * 80; c.oy = (Math.random() - 0.5) * 20; c.wt = tick + 150 + Math.random() * 250; }
+      t.x += c.ox || 0; t.y += c.oy || 0;
+    } else { c.ox = 0; c.oy = 0; c.wt = 0; }
+    const dx = t.x - c.x, dy = t.y - c.y, dist = Math.hypot(dx, dy);
+    const moving = dist > 2;
+    if (moving) { const sp = a.state === "Idle" ? 0.7 : 2.4; const step = Math.min(sp, dist); c.x += dx / dist * step; c.y += dy / dist * step; }
+    return { a, c, moving };
+  }).sort((p, q) => p.c.y - q.c.y);
+  for (const { a, c, moving } of list) drawAgent(a, c, moving);
+  requestAnimationFrame(frame);
+}
+
+const NAMES = ROLE_NAMES;
+const PHOTO = new Set(["CEO", "Secretary", "Editor", "Designer"]);
+function portrait(id) {
+  if (PHOTO.has(id)) {
+    const img = document.createElement("img"); img.src = "portrait_" + id + ".jpg"; img.alt = NAMES[id];
+    return img;
+  }
+  const cv = document.createElement("canvas"); cv.width = cv.height = 200;
+  const saved = ctx; ctx = cv.getContext("2d");
+  ctx.fillStyle = LOOK[id].pill + "33"; ctx.fillRect(0, 0, 200, 200);
+  ctx.scale(3.2, 3.2); ctx.translate(31, 41);
+  drawAgent({ id, name: "", state: "Idle" }, { x: 0, y: 0 }, false, true);
+  ctx = saved;
+  cv.style.cssText = "width:100%;aspect-ratio:1;border-radius:12px;display:block";
+  return cv;
+}
+const cardOf = {};
+function renderRoster() {
+  const box = document.getElementById("roster");
+  for (const a of agents.filter(a => team.has(a.id))) {
+    let card = cardOf[a.id];
+    if (!card) {
+      card = cardOf[a.id] = document.createElement("div");
+      const name = document.createElement("b"); name.textContent = a.name;
+      const badge = document.createElement("span");
+      card.append(portrait(a.id), name, badge);
+      box.append(card);
+    }
+    card.className = "card " + a.state;
+    const badge = card.lastChild;
+    badge.className = "badge " + a.state; badge.textContent = LABEL[a.state] || a.state;
+  }
+}
+
+const DOING = {
+  CEO: { Meeting: "みんなに指示を出している", Working: "タスクを分けて割り振っている", Idle: "報告を待っている" },
+  Secretary: { Meeting: "議事録をとっている", Working: "スケジュールと資料を整理している", Idle: "待機している" },
+  PM: { Meeting: "進み具合を共有している", Working: "全体の進行を調整している", Idle: "待機している" },
+  Designer: { Meeting: "デザイン案を説明している", Working: "デザイン案を作っている", Idle: "指示を待っている" },
+  Illustrator: { Meeting: "イラストの方向性を相談している", Working: "イラストを描いている", Idle: "指示を待っている" },
+  Editor: { Meeting: "レビューしている", Working: "文章を整えている", Idle: "原稿を待っている" },
+  Programmer: { Meeting: "実装方針を相談している", Working: "コードを書いている", Idle: "指示を待っている" },
+  DataScientist: { Meeting: "分析結果を共有している", Working: "データを分析している", Idle: "データを待っている" },
+};
+const lastState = {};
+function addLog(text) {
+  const box = document.getElementById("log");
+  const row = document.createElement("div");
+  row.textContent = new Date().toLocaleTimeString("ja-JP") + "  " + text;
+  box.prepend(row);
+  while (box.children.length > 40) box.lastChild.remove();
+}
+function renderDashboard(projects) {
+  const mine = agents.filter(a => team.has(a.id));
+  const cnt = s => mine.filter(a => a.state === s).length;
+  document.getElementById("t-work").textContent = cnt("Working");
+  document.getElementById("t-meet").textContent = cnt("Meeting");
+  document.getElementById("t-idle").textContent = cnt("Idle");
+  const running = projects.find(p => !p.done);
+  document.getElementById("t-proj").textContent = running ? running.prompt : "なし";
+  document.getElementById("t-bar").style.width = running ? Math.min(100, running.elapsed / running.duration * 100) + "%" : "0";
+  document.getElementById("t-done").textContent = projects.filter(p => p.done).length;
+  document.getElementById("dash-rows").replaceChildren(...mine.map(a => {
+    const tr = document.createElement("tr");
+    const cells = [a.name, null, (DOING[a.id] || {})[a.state] || ""];
+    cells.forEach((t, i) => {
+      const td = document.createElement("td");
+      if (i === 1) { const b = document.createElement("span"); b.className = "badge " + a.state; b.textContent = LABEL[a.state] || a.state; td.append(b); }
+      else td.textContent = t;
+      tr.append(td);
+    });
+    return tr;
+  }));
+  document.getElementById("proj-rows").replaceChildren(...projects.map(p => {
+    const tr = document.createElement("tr");
+    [p.prompt, p.done ? "完了" : "進行中 " + Math.round(p.elapsed) + "/" + p.duration + "秒", p.tasks.join(" / ")].forEach(t => {
+      const td = document.createElement("td"); td.textContent = t; tr.append(td);
+    });
+    return tr;
+  }));
+}
+
+async function refreshKey() {
+  try {
+    const st = await (await fetch("/settings")).json();
+    const b = document.getElementById("keystate");
+    b.textContent = st.engine === "api" ? "APIキーで動作中" : st.engine === "claude_code" ? "このPCの Claude Code で動作中" : "未設定(固定のタスクで動作)";
+    b.classList.toggle("ok", !!st.engine);
+  } catch (e) {}
+}
+document.getElementById("keyform").addEventListener("submit", async e => {
+  e.preventDefault();
+  const input = document.getElementById("apikey");
+  const res = await fetch("/settings/api_key", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: input.value }) });
+  input.value = "";
+  if (!res.ok) alert("キーの形式が正しくないようです");
+  refreshKey();
+});
+document.getElementById("keyclear").addEventListener("click", async () => { await fetch("/settings/api_key", { method: "DELETE" }); refreshKey(); });
+refreshKey();
+
+function renderOutputs(projects) {
+  const box = document.getElementById("outputs");
+  const p = projects[0];
+  if (!p) { box.textContent = "まだありません"; return; }
+  const ST = { working: "作成中…", done: "完了", no_key: "APIキー未設定", error: "失敗" };
+  box.replaceChildren(...Object.keys(ROLE_NAMES).filter(id => p.outputs[id]).map(id => {
+    const o = p.outputs[id];
+    const d = document.createElement("details"); d.open = false; d.className = "tile"; d.style.margin = "6px 0";
+    const sm = document.createElement("summary"); sm.textContent = ROLE_NAMES[id] + " — " + (ST[o.status] || o.status);
+    const pre = document.createElement("div"); pre.style.whiteSpace = "pre-wrap"; pre.style.marginTop = "6px"; pre.textContent = o.text;
+    d.append(sm, pre);
+    return d;
+  }));
+}
+
+async function poll() {
+  try {
+    const res = await fetch("/state");
+    agents = (await res.json()).agents;
+    renderRoster();
+    for (const a of agents) {
+      if (!team.has(a.id)) continue;
+      if (lastState[a.id] !== undefined && lastState[a.id] !== a.state)
+        addLog(`${a.name}が「${LABEL[a.state]}」になった — ${(DOING[a.id] || {})[a.state] || ""}`);
+      lastState[a.id] = a.state;
+    }
+    const projects = await (await fetch("/projects")).json();
+    renderDashboard(projects);
+    if (!document.querySelector("#outputs details[open]")) renderOutputs(projects);
+    const p = agents.find(a => a.project);
+    document.getElementById("status").textContent =
+      (p ? "プロジェクト: " + p.project + " / " : "") +
+      agents.filter(a => team.has(a.id)).map(a => `${a.name}:${LABEL[a.state] || a.state}`).join("  ");
+  } catch (e) {
+    document.getElementById("status").textContent = "サーバーに接続できません";
+  }
+}
+
+document.getElementById("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const prompt = document.getElementById("prompt").value;
+  const res = await fetch("/start_project", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, members: [...team] }),
+  });
+  if (!res.ok) { alert("開始できませんでした"); return; }
+  const data = await res.json();
+  const ul = document.getElementById("tasks");
+  ul.replaceChildren(...(data.tasks || []).map(t => Object.assign(document.createElement("li"), { textContent: t })));
+  document.getElementById("select").classList.add("hidden");
+  document.getElementById("office").classList.remove("hidden");
+  for (const k in chars) delete chars[k];
+  await poll();
+  if (!polling) polling = setInterval(poll, 1000);
+});
+
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  document.getElementById("view").classList.toggle("hidden", b.dataset.tab !== "view");
+  document.getElementById("dash").classList.toggle("hidden", b.dataset.tab !== "dash");
+}));
+
+document.getElementById("zoom").addEventListener("click", () => {
+  const wide = document.querySelector("main").classList.toggle("wide");
+  document.getElementById("zoom").textContent = wide ? "もとの大きさにもどす" : "画面いっぱいに広げる";
+});
+document.getElementById("fs").addEventListener("click", () => {
+  try { const r = document.getElementById("c").requestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+});
+
+document.getElementById("back").addEventListener("click", () => {
+  document.getElementById("office").classList.add("hidden");
+  document.getElementById("select").classList.remove("hidden");
+});
+
+for (const id of ["PM", "Illustrator", "Programmer", "DataScientist"]) {
+  const card = document.createElement("div"); card.className = "card";
+  const name = document.createElement("b"); name.textContent = "✓ " + ROLE_NAMES[id];
+  card.append(portrait(id), name);
+  document.getElementById("extra").appendChild(card);
+}
+frame();
+</script>
+</body>
+</html>
