@@ -41,6 +41,15 @@
   #extra { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .keybox { background: #fff; border: 3px solid #e5c99a; border-radius: 14px; padding: 10px 12px; margin: 12px 0; }
   .keybox label { display: block; font-weight: bold; } .keybox .row { display: flex; gap: 8px; margin: 6px 0; } .keybox button { white-space: nowrap; padding: 8px 16px; } .keybox small { color: #8a6b45; }
+  .card img, .card canvas { transform-origin: 50% 90%; }
+  .card.Working img, .card.Working canvas { animation: typing .5s ease-in-out infinite alternate; }
+  .card.Meeting img, .card.Meeting canvas { animation: talk 1s ease-in-out infinite; }
+  .card.Idle img, .card.Idle canvas { animation: float 3s ease-in-out infinite; }
+  @keyframes typing { from { transform: translateY(0) rotate(-1deg); } to { transform: translateY(-3px) rotate(1deg); } }
+  @keyframes talk { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05) rotate(-1.5deg); } }
+  @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  #extra .card:hover canvas { animation: talk .8s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .card img, .card canvas { animation: none !important; } }
   .badge.ok { background: #3aa655; }
   .hint { margin: 6px 0; font-size: 14px; }
 </style>
@@ -218,7 +227,8 @@ function drawAgent(a, c, moving, bare) {
   const L = LOOK[a.id] || LOOK.CEO;
   const working = !moving && a.state === "Working";
   const meeting = !moving && a.state === "Meeting";
-  const bob = moving ? Math.abs(Math.sin(tick / 3)) * -3 : Math.sin(tick / 20) * 0.8;
+  const phase = (a.id.length * 7) % 20;
+  const bob = moving ? Math.abs(Math.sin(tick / 3)) * -3 : working ? Math.sin(tick / 5 + phase) * 1.2 : meeting ? Math.abs(Math.sin(tick / 14 + phase)) * -2.5 : Math.sin(tick / 22 + phase) * 1.4;
   const x = c.x, y = c.y + bob;
   // 影
   ctx.beginPath(); ctx.ellipse(x, c.y + 30, 16, 5, 0, 0, 7); ctx.fillStyle = "rgba(90,60,20,.25)"; ctx.fill();
@@ -232,7 +242,9 @@ function drawAgent(a, c, moving, bare) {
   if (a.id === "CEO") { rr(x - 5, y + 3, 10, 20, 3, "#f4efe6"); ctx.fillStyle = "#c0392b"; ctx.fillRect(x - 1.5, y + 5, 3, 10); }
   // 腕(作業中は上下に動く)
   const arm = working ? Math.sin(tick / 2 + (a.id.length)) * 3 : 0;
-  rr(x - 18, y + 8 + arm, 7, 14, 3, L.body, OUT); rr(x + 11, y + 8 - arm, 7, 14, 3, L.body, OUT);
+  const wave = meeting && Math.sin(tick / 18 + phase) > 0.35;   // 会議中は時々、手を挙げて話す
+  rr(x - 18, y + 8 + arm, 7, 14, 3, L.body, OUT);
+  if (wave) rr(x + 13, y - 6 + Math.sin(tick / 4) * 3, 7, 14, 3, L.body, OUT); else rr(x + 11, y + 8 - arm, 7, 14, 3, L.body, OUT);
   // 後ろ髪
   if (a.id === "Designer") rr(x - 18, y - 22, 36, 34, 14, L.hair, OUT);
   if (a.id === "Secretary") circle(x, y - 38, 8, L.hair);
@@ -287,12 +299,18 @@ function frame() {
   ctx.clearRect(0, 0, W, H);
   drawBackground();
   const list = agents.filter(a => team.has(a.id)).map(a => {
-    const t = targetFor(a);
+    const t0 = targetFor(a);
+    const t = { ...t0 };
     const home = { x: DESKS[a.id].x + SEAT_OFFSET.x, y: DESKS[a.id].y + SEAT_OFFSET.y };
     const c = chars[a.id] || (chars[a.id] = { ...home });
+    // 待機中は、席のまわりを時々うろうろ歩く(作業中・会議中は席から動かない)
+    if (a.state === "Idle") {
+      if (!(tick < c.wt)) { c.ox = (Math.random() - 0.5) * 80; c.oy = (Math.random() - 0.5) * 20; c.wt = tick + 150 + Math.random() * 250; }
+      t.x += c.ox || 0; t.y += c.oy || 0;
+    } else { c.ox = 0; c.oy = 0; c.wt = 0; }
     const dx = t.x - c.x, dy = t.y - c.y, dist = Math.hypot(dx, dy);
     const moving = dist > 2;
-    if (moving) { const step = Math.min(2.4, dist); c.x += dx / dist * step; c.y += dy / dist * step; }
+    if (moving) { const sp = a.state === "Idle" ? 0.7 : 2.4; const step = Math.min(sp, dist); c.x += dx / dist * step; c.y += dy / dist * step; }
     return { a, c, moving };
   }).sort((p, q) => p.c.y - q.c.y);
   for (const { a, c, moving } of list) drawAgent(a, c, moving);
@@ -315,16 +333,22 @@ function portrait(id) {
   cv.style.cssText = "width:100%;aspect-ratio:1;border-radius:12px;display:block";
   return cv;
 }
+const cardOf = {};
 function renderRoster() {
   const box = document.getElementById("roster");
-  box.replaceChildren(...agents.filter(a => team.has(a.id)).map(a => {
-    const card = document.createElement("div"); card.className = "card";
-    const img = portrait(a.id);
-    const name = document.createElement("b"); name.textContent = a.name;
-    const badge = document.createElement("span"); badge.className = "badge " + a.state; badge.textContent = LABEL[a.state] || a.state;
-    card.append(img, name, badge);
-    return card;
-  }));
+  for (const a of agents.filter(a => team.has(a.id))) {
+    let card = cardOf[a.id];
+    if (!card) {
+      card = cardOf[a.id] = document.createElement("div");
+      const name = document.createElement("b"); name.textContent = a.name;
+      const badge = document.createElement("span");
+      card.append(portrait(a.id), name, badge);
+      box.append(card);
+    }
+    card.className = "card " + a.state;
+    const badge = card.lastChild;
+    badge.className = "badge " + a.state; badge.textContent = LABEL[a.state] || a.state;
+  }
 }
 
 const DOING = {
