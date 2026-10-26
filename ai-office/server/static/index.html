@@ -39,7 +39,7 @@
 
   <section id="office" class="hidden">
     <button class="back" id="back">← キャラ選択にもどる</button>
-    <canvas id="c" width="900" height="480"></canvas>
+    <canvas id="c" width="900" height="500"></canvas>
     <div id="status"></div>
     <ul id="tasks"></ul>
   </section>
@@ -70,21 +70,26 @@ for (const p of PICKS) {
   stage.appendChild(b);
 }
 
-// ---- オフィス画面 ----
+// ---- オフィス画面(かわいい表示) ----
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 const W = canvas.width, H = canvas.height;
 const ROOMS = [
-  { name: "社長室", x: 20, y: 20, w: 250, h: 200, color: "#f4e1c1" },
-  { name: "秘書デスク", x: 20, y: 250, w: 250, h: 210, color: "#f8dcd8" },
-  { name: "編集室", x: 300, y: 250, w: 290, h: 210, color: "#cdeadf" },
-  { name: "デザイン室", x: 620, y: 250, w: 260, h: 210, color: "#dce8f7" },
-  { name: "会議室", x: 300, y: 20, w: 580, h: 200, color: "#d4e4f2" },
+  { name: "社長室", icon: "🪴", x: 20, y: 20, w: 250, h: 210, color: "#fbe6c8", edge: "#e8c48f" },
+  { name: "秘書デスク", icon: "📅", x: 20, y: 260, w: 250, h: 220, color: "#fbdcd9", edge: "#eeb1ab" },
+  { name: "編集室", icon: "🎧", x: 300, y: 260, w: 290, h: 220, color: "#d3efe3", edge: "#9fd3bd" },
+  { name: "デザイン室", icon: "🎨", x: 620, y: 260, w: 260, h: 220, color: "#e1ebfa", edge: "#aac3ea" },
+  { name: "会議室", icon: "💡", x: 300, y: 20, w: 580, h: 210, color: "#d9e9f6", edge: "#a9c9e6" },
 ];
-const DESKS = { CEO: { x: 50, y: 95 }, Secretary: { x: 50, y: 330 }, Editor: { x: 330, y: 330 }, Designer: { x: 650, y: 330 } };
-const SEAT_OFFSET = { x: 100, y: 5 };
-const MEETING_SEATS = { CEO: { x: 480, y: 115 }, Secretary: { x: 590, y: 70 }, Editor: { x: 700, y: 115 }, Designer: { x: 590, y: 170 } };
-const COLORS = { CEO: "#b9b9c4", Secretary: "#e07aa0", Editor: "#e2a24a", Designer: "#e25a8a" };
+const DESKS = { CEO: { x: 50, y: 100 }, Secretary: { x: 50, y: 340 }, Editor: { x: 335, y: 340 }, Designer: { x: 655, y: 340 } };
+const SEAT_OFFSET = { x: 45, y: 54 };
+const MEETING_SEATS = { CEO: { x: 540, y: 172 }, Secretary: { x: 540, y: 62 }, Editor: { x: 640, y: 62 }, Designer: { x: 640, y: 172 } };
+const LOOK = {
+  CEO:       { body: "#8b6b4a", hair: "#d9dde3", pill: "#b98a2e" },
+  Secretary: { body: "#f4a6b8", hair: "#5a3a2a", pill: "#e0709a" },
+  Editor:    { body: "#d9534f", hair: "#4a3020", pill: "#e2a24a" },
+  Designer:  { body: "#f2c14e", hair: "#6b4226", pill: "#e25a8a" },
+};
 const LABEL = { Idle: "待機中", Meeting: "会議中", Working: "作業中" };
 const chars = {};
 let agents = [];
@@ -97,58 +102,133 @@ function targetFor(a) {
   return { x: d.x + SEAT_OFFSET.x, y: d.y + SEAT_OFFSET.y };
 }
 
-function roundRect(x, y, w, h, r, fill) {
-  ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+function rr(x, y, w, h, r, fill, stroke) {
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r);
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
 }
+function circle(x, y, r, fill) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); }
+function emoji(t, x, y, size) { ctx.font = size + "px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#000"; ctx.fillText(t, x, y); }
 
 function drawBackground() {
-  ctx.fillStyle = "#e8d3a2"; ctx.fillRect(0, 0, W, H);
-  ctx.font = "13px sans-serif"; ctx.textAlign = "left";
+  // 床(木目)
+  ctx.fillStyle = "#f3d9a4"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(190,140,70,.12)";
+  for (let y = 0; y < H; y += 28) ctx.fillRect(0, y, W, 2);
   for (const r of ROOMS) {
-    roundRect(r.x, r.y, r.w, r.h, 14, r.color);
-    ctx.fillStyle = "#6b5236"; ctx.fillText(r.name, r.x + 12, r.y + 22);
+    rr(r.x + 3, r.y + 5, r.w, r.h, 18, "rgba(120,80,30,.18)");
+    rr(r.x, r.y, r.w, r.h, 18, r.color, r.edge);
+    ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = "#6b4a2b";
+    ctx.fillText(r.name, r.x + 14, r.y + 24);
+    emoji(r.icon, r.x + r.w - 24, r.y + 28, 20);
   }
-  roundRect(430, 85, 320, 70, 35, "#8a6a48");
+  // 社長室: 赤い丸ラグ・本棚・窓
+  ctx.beginPath(); ctx.ellipse(160, 160, 85, 38, 0, 0, 7); ctx.fillStyle = "#f0a09a"; ctx.fill();
+  rr(130, 34, 70, 40, 6, "#bfe4f5", "#8b6b4a"); ctx.fillStyle = "#8b6b4a"; ctx.fillRect(164, 34, 2, 40);
+  emoji("📚", 244, 220, 22); emoji("🪴", 38, 215, 24);
+  // 秘書: カウンター
+  emoji("☎️", 200, 300, 18); emoji("🪴", 38, 460, 22); emoji("📝", 240, 460, 18);
+  // 編集室: 本棚・ソファ
+  emoji("📚", 560, 335, 22); rr(450, 440, 120, 26, 10, "#7fb2d6"); emoji("☕", 340, 462, 18);
+  // デザイン室: タブレットと絵の具
+  emoji("🖌️", 850, 335, 20); emoji("🎨", 850, 465, 22); emoji("🪴", 640, 465, 22);
+  // 会議室: ホワイトボード、スクリーン、丸テーブル
+  rr(350, 52, 110, 62, 6, "#fff", "#b8c7d6");
+  ctx.strokeStyle = "#e2735a"; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(362, 104); ctx.lineTo(388, 82); ctx.lineTo(410, 92); ctx.lineTo(442, 64); ctx.stroke();
+  ctx.font = "12px sans-serif"; ctx.fillStyle = "#555"; ctx.textAlign = "left"; ctx.fillText("アイデア", 356, 70); emoji("💡", 448, 88, 16);
+  rr(700, 52, 120, 62, 6, "#f5f8ff", "#9bb0c9");
+  ["#f2a65a", "#7fb2d6", "#7fc79a"].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(730 + i * 26, 106 - (i + 1) * 14, 18, (i + 1) * 14); });
+  ctx.beginPath(); ctx.ellipse(590, 130, 160, 34, 0, 0, 7); ctx.fillStyle = "#c98f58"; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(590, 126, 160, 34, 0, 0, 7); ctx.fillStyle = "#e0a96d"; ctx.fill();
+  emoji("☕", 560, 134, 16); emoji("💻", 620, 128, 16);
+  // 机
   for (const id in DESKS) {
     if (!team.has(id)) continue;
     const d = DESKS[id];
-    roundRect(d.x, d.y - 22, 90, 44, 6, "#a98258");
-    roundRect(d.x + 28, d.y - 18, 34, 22, 3, "#2a3142");
+    rr(d.x, d.y - 20, 90, 40, 8, "#c68f55");
+    rr(d.x + 3, d.y - 20, 84, 30, 8, "#e0a96d");
+    rr(d.x + 26, d.y - 40, 38, 24, 4, "#2a3142");
+    rr(d.x + 29, d.y - 37, 32, 18, 3, "#8fd0ff");
+    rr(d.x + 37, d.y - 16, 16, 4, 2, "#fff");
   }
 }
 
 function drawAgent(a, c, moving) {
-  const bob = moving ? Math.sin(tick / 4) * 2 : 0;
-  ctx.fillStyle = "rgba(0,0,0,.2)";
-  ctx.beginPath(); ctx.ellipse(c.x, c.y + 18, 13, 5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = COLORS[a.id] || "#ccc";
-  ctx.beginPath(); ctx.arc(c.x, c.y + bob, 15, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = "#222";
-  ctx.beginPath(); ctx.arc(c.x - 5, c.y - 3 + bob, 2, 0, 7); ctx.arc(c.x + 5, c.y - 3 + bob, 2, 0, 7); ctx.fill();
-  ctx.textAlign = "center"; ctx.font = "12px sans-serif";
-  ctx.fillStyle = "#4a3220"; ctx.fillText(a.name, c.x, c.y + 36);
-  if (!moving && a.state !== "Idle") {
-    const text = a.state === "Working" ? "⌨ カタカタ…" : "💬 …";
-    const w = ctx.measureText(text).width + 14;
-    roundRect(c.x - w / 2, c.y - 46, w, 20, 8, "#fff");
-    ctx.fillStyle = "#222"; ctx.fillText(text, c.x, c.y - 32);
+  const L = LOOK[a.id] || LOOK.CEO;
+  const working = !moving && a.state === "Working";
+  const meeting = !moving && a.state === "Meeting";
+  const bob = moving ? Math.abs(Math.sin(tick / 3)) * -3 : Math.sin(tick / 20) * 0.8;
+  const x = c.x, y = c.y + bob;
+  // 影
+  ctx.beginPath(); ctx.ellipse(x, c.y + 30, 16, 5, 0, 0, 7); ctx.fillStyle = "rgba(90,60,20,.25)"; ctx.fill();
+  // 足
+  const step = moving ? Math.sin(tick / 3) * 4 : 0;
+  rr(x - 9 + step, y + 20, 7, 10, 3, "#5a4636"); rr(x + 2 - step, y + 20, 7, 10, 3, "#5a4636");
+  // 体
+  rr(x - 13, y + 2, 26, 22, 9, L.body);
+  if (a.id === "Editor") { ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1.5; for (let i = -8; i <= 8; i += 8) { ctx.beginPath(); ctx.moveTo(x + i, y + 4); ctx.lineTo(x + i, y + 22); ctx.stroke(); } for (let j = 8; j <= 20; j += 8) { ctx.beginPath(); ctx.moveTo(x - 12, y + j); ctx.lineTo(x + 12, y + j); ctx.stroke(); } }
+  if (a.id === "Designer") { ["#e25a5a", "#f2a65a", "#7fc79a", "#6aa6e0"].forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(x - 12, y + 6 + i * 4, 24, 2.5); }); }
+  if (a.id === "CEO") { rr(x - 5, y + 3, 10, 20, 3, "#f4efe6"); ctx.fillStyle = "#c0392b"; ctx.fillRect(x - 1.5, y + 5, 3, 10); }
+  // 腕(作業中は上下に動く)
+  const arm = working ? Math.sin(tick / 2 + (a.id.length)) * 3 : 0;
+  rr(x - 18, y + 8 + arm, 7, 14, 3, L.body); rr(x + 11, y + 8 - arm, 7, 14, 3, L.body);
+  // 後ろ髪
+  if (a.id === "Designer") rr(x - 18, y - 22, 36, 34, 14, L.hair);
+  if (a.id === "Secretary") circle(x, y - 38, 8, L.hair);
+  // 顔
+  circle(x, y - 12, 17, "#ffe3c8");
+  // 髪
+  ctx.fillStyle = L.hair; ctx.beginPath(); ctx.arc(x, y - 14, 18, Math.PI, 0); ctx.fill();
+  if (a.id === "CEO") { circle(x - 16, y - 16, 4, L.hair); circle(x + 16, y - 16, 4, L.hair); }
+  if (a.id === "Designer") { rr(x + 7, y - 28, 8, 4, 2, "#e8484d"); }
+  if (a.id === "Editor") { ctx.strokeStyle = "#444"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y - 16, 19, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke(); rr(x - 22, y - 18, 7, 12, 3, "#444"); rr(x + 15, y - 18, 7, 12, 3, "#444"); }
+  // 目・ほっぺ・口
+  const blink = tick % 220 < 6;
+  ctx.fillStyle = "#3a2a20";
+  if (blink) { ctx.fillRect(x - 8, y - 10, 5, 1.5); ctx.fillRect(x + 3, y - 10, 5, 1.5); }
+  else { circle(x - 5.5, y - 10, 2.4, "#3a2a20"); circle(x + 5.5, y - 10, 2.4, "#3a2a20"); circle(x - 4.8, y - 11, 0.9, "#fff"); circle(x + 6.2, y - 11, 0.9, "#fff"); }
+  circle(x - 10, y - 5, 3, "rgba(255,130,130,.45)"); circle(x + 10, y - 5, 3, "rgba(255,130,130,.45)");
+  if (a.id === "Secretary") { ctx.strokeStyle = "#d33"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x - 5.5, y - 10, 5, 0, 7); ctx.arc(x + 5.5, y - 10, 5, 0, 7); ctx.stroke(); }
+  if (a.id === "CEO") { ctx.strokeStyle = "#ccc"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 9, y - 16); ctx.lineTo(x - 2, y - 16); ctx.moveTo(x + 2, y - 16); ctx.lineTo(x + 9, y - 16); ctx.stroke(); }
+  ctx.strokeStyle = "#a0453a"; ctx.lineWidth = 1.6; ctx.beginPath();
+  if (meeting && Math.floor(tick / 12) % 2 === 0) { ctx.ellipse(x, y - 2, 3, 2.5, 0, 0, 7); ctx.fillStyle = "#c0554a"; ctx.fill(); }
+  else { ctx.arc(x, y - 4, 4, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke(); }
+  // 名前リボン
+  ctx.font = "bold 12px sans-serif"; ctx.textAlign = "center";
+  const tw = ctx.measureText(a.name).width + 16;
+  rr(x - tw / 2, c.y + 36, tw, 18, 9, L.pill);
+  ctx.fillStyle = "#fff"; ctx.fillText(a.name, x, c.y + 49);
+  // 吹き出し・演出
+  let text = null;
+  if (working) text = a.id === "CEO" ? "もしもし" : a.id === "Designer" ? "💡 ひらめき!" : a.id === "Editor" ? "♪ カタカタ" : "⌨ カタカタ…";
+  else if (meeting) text = ["…", "？", "アイデア!", "なるほど"][(Math.floor(tick / 90) + a.id.length) % 4];
+  else if (!moving) text = a.state === "Idle" ? "zZ" : null;
+  if (text) {
+    ctx.font = "bold 12px sans-serif";
+    const w = ctx.measureText(text).width + 18;
+    const by = y - 52 - (Math.sin(tick / 15) + 1) * 1.5;
+    rr(x - w / 2, by, w, 22, 11, "#fff", "#e5c99a");
+    ctx.beginPath(); ctx.moveTo(x - 4, by + 21); ctx.lineTo(x + 2, by + 21); ctx.lineTo(x - 1, by + 27); ctx.fillStyle = "#fff"; ctx.fill();
+    ctx.fillStyle = "#4a3220"; ctx.fillText(text, x, by + 15);
   }
+  if (working && a.id === "Editor") emoji("♪", x + 30 + Math.sin(tick / 10) * 4, y - 20 - (tick % 60) / 3, 14);
+  if (working && a.id === "Designer") emoji("✨", x + 28, y - 30 + Math.sin(tick / 8) * 3, 14);
 }
 
 function frame() {
   tick++;
   ctx.clearRect(0, 0, W, H);
   drawBackground();
-  for (const a of agents) {
-    if (!team.has(a.id)) continue;
+  const list = agents.filter(a => team.has(a.id)).map(a => {
     const t = targetFor(a);
     const home = { x: DESKS[a.id].x + SEAT_OFFSET.x, y: DESKS[a.id].y + SEAT_OFFSET.y };
     const c = chars[a.id] || (chars[a.id] = { ...home });
     const dx = t.x - c.x, dy = t.y - c.y, dist = Math.hypot(dx, dy);
     const moving = dist > 2;
-    if (moving) { const step = Math.min(2.2, dist); c.x += dx / dist * step; c.y += dy / dist * step; }
-    drawAgent(a, c, moving);
-  }
+    if (moving) { const step = Math.min(2.4, dist); c.x += dx / dist * step; c.y += dy / dist * step; }
+    return { a, c, moving };
+  }).sort((p, q) => p.c.y - q.c.y);
+  for (const { a, c, moving } of list) drawAgent(a, c, moving);
   requestAnimationFrame(frame);
 }
 
