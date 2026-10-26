@@ -14,7 +14,7 @@ AI社員が会議室・デスクを歩き回る様子をUnityで表示するプ�
     curl -X POST localhost:8000/start_project -H 'Content-Type: application/json' -d '{"prompt":"LPを作る"}'
     curl localhost:8000/state
 
-開始から5秒は全員 Meeting、その後20秒 Working、その後 Idle。Engineer は会議のあと8秒待ってから Working(`AGENTS` の `work_delay`)。プロジェクトは `project_id` ごとに複数持てて、重なった場合は最後に始めたものを優先する。`GET /projects` で一覧を返す。タスク分解は `decompose_task` にLLM呼び出しを入れる。
+開始から5秒は全員 Meeting、その後20秒 Working、その後 Idle。Engineer は会議のあと8秒待ってから Working(`AGENTS` の `work_delay`)。プロジェクトは `project_id` ごとに複数持てて、重なった場合は最後に始めたものを優先する。`GET /projects` で一覧を返す。タスク分解(`decompose_task`)は、環境変数 `ANTHROPIC_API_KEY` があれば Claude API で行い、なければ(または失敗したら)固定のタスクを返す。モデルは `AI_OFFICE_MODEL` で変えられる(既定 `claude-sonnet-5-5`)。
 
 ## Unity
 
