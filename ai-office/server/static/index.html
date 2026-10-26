@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Office</title>
+<style>
+  body { margin: 0; font-family: sans-serif; background: #1e2430; color: #eee; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; }
+  form { display: flex; gap: 8px; margin-bottom: 12px; }
+  input { flex: 1; padding: 10px; border-radius: 6px; border: 0; font-size: 16px; }
+  button { padding: 10px 16px; border-radius: 6px; border: 0; background: #4a90e2; color: #fff; font-size: 16px; }
+  canvas { width: 100%; background: #2b3344; border-radius: 8px; display: block; }
+  ul { padding-left: 20px; }
+  #status { color: #9ab; margin: 8px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AI Office</h1>
+  <form id="form">
+    <input id="prompt" placeholder="例: ランディングページを作る" required maxlength="2000">
+    <button>開始</button>
+  </form>
+  <canvas id="c" width="720" height="360"></canvas>
+  <div id="status"></div>
+  <ul id="tasks"></ul>
+</main>
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const POS = { MeetingRoom: { x: 520, y: 180 }, Desk: null };
+const DESKS = { CEO: { x: 100, y: 90 }, Designer: { x: 100, y: 180 }, Engineer: { x: 100, y: 270 } };
+const COLORS = { CEO: "#e2b34a", Designer: "#e25a8a", Engineer: "#4ac28a" };
+const LABEL = { Idle: "待機中", Meeting: "会議中", Working: "作業中" };
+const chars = {};
+let agents = [];
+
+function targetFor(a) {
+  if (a.target === "MeetingRoom") {
+    const i = agents.findIndex(x => x.id === a.id);
+    return { x: POS.MeetingRoom.x + (i - 1) * 50, y: POS.MeetingRoom.y };
+  }
+  return DESKS[a.id] || { x: 100, y: 180 };
+}
+
+async function poll() {
+  try {
+    const res = await fetch("/state");
+    agents = (await res.json()).agents;
+    const p = agents.find(a => a.project);
+    document.getElementById("status").textContent =
+      (p ? "プロジェクト: " + p.project + " / " : "") + agents.map(a => `${a.name}:${LABEL[a.state] || a.state}`).join("  ");
+  } catch (e) {
+    document.getElementById("status").textContent = "サーバーに接続できません";
+  }
+}
+
+function frame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#3a4560";
+  ctx.fillRect(400, 60, 300, 240);
+  ctx.fillStyle = "#aab";
+  ctx.fillText("会議室", 410, 80);
+  for (const id in DESKS) {
+    const d = DESKS[id];
+    ctx.fillStyle = "#555e78";
+    ctx.fillRect(d.x - 40, d.y - 14, 80, 28);
+  }
+  for (const a of agents) {
+    const t = targetFor(a);
+    const c = chars[a.id] || (chars[a.id] = { x: t.x, y: t.y });
+    const dx = t.x - c.x, dy = t.y - c.y, dist = Math.hypot(dx, dy);
+    const arrived = dist < 2;
+    if (!arrived) { c.x += dx / dist * Math.min(2, dist); c.y += dy / dist * Math.min(2, dist); }
+    ctx.fillStyle = COLORS[a.id] || "#ccc";
+    ctx.beginPath(); ctx.arc(c.x, c.y, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+    const mark = !arrived ? "…" : a.state === "Working" ? "⌨" : a.state === "Meeting" ? "💬" : "";
+    ctx.fillText(a.name + " " + mark, c.x, c.y - 22);
+  }
+  requestAnimationFrame(frame);
+}
+
+document.getElementById("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const prompt = document.getElementById("prompt").value;
+  const res = await fetch("/start_project", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt })
+  });
+  const data = await res.json();
+  document.getElementById("tasks").innerHTML = (data.tasks || []).map(t => "<li></li>").join("");
+  [...document.querySelectorAll("#tasks li")].forEach((li, i) => li.textContent = data.tasks[i]);
+  poll();
+});
+
+setInterval(poll, 1000);
+poll();
+frame();
+</script>
+</body>
+</html>

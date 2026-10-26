@@ -4,8 +4,10 @@ import os
 import time
 import uuid
 from enum import Enum
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 app = FastAPI(title="AI Office")
@@ -140,3 +142,7 @@ def get_state():
             "project": projects[pid]["prompt"] if pid else "",
         })
     return {"agents": agents}
+
+
+# ブラウザ用ビューア。API のルートより後に置く。
+app.mount("/", StaticFiles(directory=Path(__file__).parent / "static", html=True), name="static")
