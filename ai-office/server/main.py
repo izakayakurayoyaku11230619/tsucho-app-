@@ -39,12 +39,16 @@ class Agent:
         self.timeline = timeline
 
 
-# 流れ: 全員で会議 → 社長が指示 → デザイナーと編集者が作業 → 会議室でレビュー
+# 流れ: 全員で会議 → 社長が指示 → 各担当が作業 → 会議室でレビュー
 AGENTS = [
     Agent("CEO", "社長AI", "CEO", [(0, 5, M), (5, 10, W), (20, 25, M)]),
     Agent("Secretary", "秘書AI", "Secretary", [(0, 5, M), (5, 25, W)]),
-    Agent("Editor", "編集者AI", "Editor", [(0, 5, M), (10, 20, W), (20, 25, M)]),
+    Agent("PM", "マネージャーAI", "PM", [(0, 5, M), (5, 20, W), (20, 25, M)]),
     Agent("Designer", "デザイナーAI", "Designer", [(0, 5, M), (10, 20, W), (20, 25, M)]),
+    Agent("Illustrator", "イラストAI", "Illustrator", [(0, 5, M), (10, 20, W), (20, 25, M)]),
+    Agent("Editor", "編集者AI", "Editor", [(0, 5, M), (10, 20, W), (20, 25, M)]),
+    Agent("Programmer", "プログラマーAI", "Programmer", [(0, 5, M), (8, 20, W), (20, 25, M)]),
+    Agent("DataScientist", "データ分析AI", "DataScientist", [(0, 5, M), (10, 18, W), (20, 25, M)]),
 ]
 AGENT_IDS = {a.id for a in AGENTS}
 
@@ -55,7 +59,7 @@ projects: dict[str, dict] = {}
 MODEL = os.environ.get("AI_OFFICE_MODEL", "claude-sonnet-5-5")
 
 SYSTEM_PROMPT = (
-    "あなたは小さな会社の社長AIです。ユーザーの依頼を、秘書AI・デザイナーAI・編集者AIが"
+    "あなたは小さな会社の社長AIです。ユーザーの依頼を、マネージャーAI・デザイナーAI・イラストAI・編集者AI・プログラマーAI・データ分析AIが"
     "進められる3〜5個のタスクに分解してください。"
     "出力は日本語の短い文字列のJSON配列のみ(前置きやコードブロックは不要)。"
 )
