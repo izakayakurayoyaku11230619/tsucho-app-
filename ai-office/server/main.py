@@ -1,4 +1,5 @@
 import time
+import uuid
 from enum import Enum
 
 from fastapi import FastAPI, HTTPException
@@ -21,19 +22,22 @@ class StartRequest(BaseModel):
 
 
 class Agent:
-    def __init__(self, id: str, name: str, role: str):
+    def __init__(self, id: str, name: str, role: str, work_delay: float = 0):
         self.id = id
         self.name = name
         self.role = role
+        # 会議のあと、この秒数だけ待ってから作業を始める(デザイン完了待ちなど)
+        self.work_delay = work_delay
 
 
 AGENTS = [
     Agent("CEO", "社長AI", "CEO"),
     Agent("Designer", "デザイナーAI", "Designer"),
+    Agent("Engineer", "エンジニアAI", "Engineer", work_delay=8),
 ]
 
-# 単一プロジェクトのみ保持する簡易版。複数対応するならproject_idをキーにする。
-project: dict | None = None
+# project_id -> {"prompt", "tasks", "started_at"}
+projects: dict[str, dict] = {}
 
 
 def decompose_task(prompt: str) -> list[str]:
@@ -41,15 +45,23 @@ def decompose_task(prompt: str) -> list[str]:
     return [f"『{prompt}』の要件を整理する", "デザイン案を作る"]
 
 
-def current_state(now: float) -> State:
-    if project is None:
-        return State.IDLE
+def state_in_project(agent: Agent, project: dict, now: float) -> State:
     elapsed = now - project["started_at"]
     if elapsed < MEETING_SECONDS:
         return State.MEETING
-    if elapsed < MEETING_SECONDS + WORKING_SECONDS:
+    work_start = MEETING_SECONDS + agent.work_delay
+    if work_start <= elapsed < work_start + WORKING_SECONDS:
         return State.WORKING
     return State.IDLE
+
+
+def agent_state(agent: Agent, now: float) -> tuple[State, str | None]:
+    """複数プロジェクトが重なったら、最後に始まった(動いている)ものを優先する。"""
+    for pid, project in sorted(projects.items(), key=lambda kv: -kv[1]["started_at"]):
+        state = state_in_project(agent, project, now)
+        if state != State.IDLE or now - project["started_at"] < MEETING_SECONDS + agent.work_delay:
+            return state, pid
+    return State.IDLE, None
 
 
 def target_for(state: State) -> str:
@@ -62,26 +74,37 @@ def target_for(state: State) -> str:
 
 @app.post("/start_project")
 def start_project(req: StartRequest):
-    global project
-    project = {
+    project_id = uuid.uuid4().hex[:8]
+    projects[project_id] = {
         "prompt": req.prompt,
         "tasks": decompose_task(req.prompt),
         "started_at": time.time(),
     }
     return {
+        "project_id": project_id,
         "message": f"社長が『{req.prompt}』のプロジェクトを開始しました。",
-        "tasks": project["tasks"],
+        "tasks": projects[project_id]["tasks"],
     }
+
+
+@app.get("/projects")
+def list_projects():
+    return [{"project_id": pid, "prompt": p["prompt"], "tasks": p["tasks"]} for pid, p in projects.items()]
 
 
 @app.get("/state")
 def get_state():
     """Unityが定期的に取得する。JsonUtilityが辞書を読めないので配列で返す。"""
-    state = current_state(time.time())
-    return {
-        "project": project["prompt"] if project else None,
-        "agents": [
-            {"id": a.id, "name": a.name, "state": state.value, "target": target_for(state)}
-            for a in AGENTS
-        ],
-    }
+    now = time.time()
+    agents = []
+    for a in AGENTS:
+        state, pid = agent_state(a, now)
+        agents.append({
+            "id": a.id,
+            "name": a.name,
+            "state": state.value,
+            "target": target_for(state),
+            "project_id": pid or "",
+            "project": projects[pid]["prompt"] if pid else "",
+        })
+    return {"agents": agents}

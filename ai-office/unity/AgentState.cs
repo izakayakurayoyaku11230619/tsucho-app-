@@ -14,11 +14,12 @@ public class AgentDto
     public string name;
     public string state;
     public string target;
+    public string project_id;
+    public string project;
 }
 
 [Serializable]
 public class StateResponse
 {
-    public string project;
     public AgentDto[] agents;
 }
