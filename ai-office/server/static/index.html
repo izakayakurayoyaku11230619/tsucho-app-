@@ -6,7 +6,7 @@
 <title>AI Office</title>
 <style>
   body { margin: 0; font-family: sans-serif; background: #fff4c8; color: #4a3220; }
-  main { max-width: 960px; margin: 0 auto; padding: 12px; }
+  main { max-width: 1500px; margin: 0 auto; padding: 12px; }
   h1 { margin: 4px 0 10px; font-size: 20px; }
   .hidden { display: none !important; }
   #stage { position: relative; line-height: 0; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
@@ -29,6 +29,10 @@
   .tabs { display: flex; gap: 8px; margin: 8px 0; }
   .tabs button { padding: 8px 18px; border-radius: 10px; border: 2px solid #c9a35a; background: #fff; color: #6b4a2b; font-weight: bold; }
   .tabs button.on { background: #c9a35a; color: #fff; }
+  .tools { display: flex; gap: 8px; margin: 0 0 8px; }
+  .tools button { padding: 6px 14px; border-radius: 10px; border: 2px solid #c9a35a; background: #fff; color: #6b4a2b; font-weight: bold; }
+  main.wide { max-width: none; }
+  canvas:fullscreen { width: 100vw; height: 100vh; object-fit: contain; border-radius: 0; background: #fbf3dc; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
   .tile { background: #fff; border: 3px solid #e5c99a; border-radius: 14px; padding: 10px 12px; }
   .tile small { color: #8a6b45; display: block; } .tile strong { font-size: 22px; }
@@ -77,6 +81,7 @@
   <section id="office" class="hidden">
     <button class="back" id="back">← キャラ選択にもどる</button>
     <div class="tabs"><button class="on" data-tab="view">オフィス</button><button data-tab="dash">ダッシュボード</button></div>
+    <div class="tools"><button type="button" id="zoom">画面いっぱいに広げる</button><button type="button" id="fs">全画面</button></div>
     <div id="dash" class="hidden">
       <div class="tiles">
         <div class="tile"><small>進行中のプロジェクト</small><strong id="t-proj">-</strong><div class="bar"><i id="t-bar"></i></div></div>
@@ -479,6 +484,14 @@ document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click
   document.getElementById("view").classList.toggle("hidden", b.dataset.tab !== "view");
   document.getElementById("dash").classList.toggle("hidden", b.dataset.tab !== "dash");
 }));
+
+document.getElementById("zoom").addEventListener("click", () => {
+  const wide = document.querySelector("main").classList.toggle("wide");
+  document.getElementById("zoom").textContent = wide ? "もとの大きさにもどす" : "画面いっぱいに広げる";
+});
+document.getElementById("fs").addEventListener("click", () => {
+  try { const r = document.getElementById("c").requestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+});
 
 document.getElementById("back").addEventListener("click", () => {
   document.getElementById("office").classList.add("hidden");
